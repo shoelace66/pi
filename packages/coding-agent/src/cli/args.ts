@@ -81,6 +81,11 @@ export function parseArgs(args: string[]): Args {
 			const mode = args[++i];
 			if (mode === "text" || mode === "json" || mode === "rpc") {
 				result.mode = mode;
+			} else {
+				result.diagnostics.push({
+					type: "error",
+					message: `Invalid mode "${mode}". Valid values: text, json, rpc`,
+				});
 			}
 		} else if (arg === "--continue" || arg === "-c") {
 			result.continue = true;

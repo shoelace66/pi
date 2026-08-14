@@ -142,13 +142,14 @@ export class FooterDataProvider {
 		return () => this.branchChangeCallbacks.delete(callback);
 	}
 
-	/** Internal: set extension status */
-	setExtensionStatus(key: string, text: string | undefined): void {
+	/** Internal: set extension status. Returns whether the visible value changed. */
+	setExtensionStatus(key: string, text: string | undefined): boolean {
 		if (text === undefined) {
-			this.extensionStatuses.delete(key);
-		} else {
-			this.extensionStatuses.set(key, text);
+			return this.extensionStatuses.delete(key);
 		}
+		if (this.extensionStatuses.get(key) === text) return false;
+		this.extensionStatuses.set(key, text);
+		return true;
 	}
 
 	/** Internal: clear extension statuses */

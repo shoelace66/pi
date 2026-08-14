@@ -29,6 +29,9 @@ import {
 	type ToolName,
 	withFileMutationQueue,
 } from "./tools/index.ts";
+import { MonitorRegistry } from "./wakeup/monitor-registry.ts";
+import { createOuterLoopTool } from "./wakeup/outer-loop-tool.ts";
+import type { WakeStore } from "./wakeup/types.ts";
 
 // Preserve the pre-0.81 fallback for extensions that construct Agent instances
 // or invoke low-level agent loops without supplying streamFn. Agent core remains
@@ -71,6 +74,11 @@ export interface CreateAgentSessionOptions {
 	excludeTools?: string[];
 	/** Custom tools to register (in addition to built-in tools). */
 	customTools?: ToolDefinition[];
+	/** Optional outer-loop self-wakeup tools. The scheduler remains caller-owned. */
+	wakeup?: {
+		store: WakeStore;
+		monitorRegistry?: MonitorRegistry;
+	};
 
 	/** Resource loader. When omitted, DefaultResourceLoader is used. */
 	resourceLoader?: ResourceLoader;
@@ -110,6 +118,80 @@ export type {
 export type { PromptTemplate } from "./prompt-templates.ts";
 export type { Skill } from "./skills.ts";
 export type { Tool } from "./tools/index.ts";
+export type {
+	AgentTargetRef,
+	AgentTargetResolver,
+	AgentWakeRequest,
+	AgentWakeResult,
+	AgentWakeServiceOptions,
+	AgentWakeStatus,
+	ClaimedWake,
+	CreateWakeInput,
+	CreateWakeResult,
+	FileStateAdapterOptions,
+	FileWakeEvent,
+	InMemoryWakeStats,
+	InMemoryWakeStoreOptions,
+	JsonPrimitive,
+	JsonValue,
+	MonitorAdapter,
+	MonitorCondition,
+	MonitorDelivery,
+	MonitorEvaluation,
+	MonitorIntent,
+	MonitorObservation,
+	MonitorWakeTrigger,
+	OuterLoopEvent,
+	OuterLoopInput,
+	OuterLoopListener,
+	OuterLoopToolContext,
+	ProcessState,
+	ProcessStateAdapterOptions,
+	ProcessStateQuery,
+	ResolvedAgentTarget,
+	TimeWakeTrigger,
+	TriggerResult,
+	WakeCause,
+	WakeError,
+	WakeFailure,
+	WakeJob,
+	WakeJournal,
+	WakeJournalEnvelope,
+	WakeJournalEvent,
+	WakeJournalKind,
+	WakeLease,
+	WakeObjective,
+	WakeRecoveryNotice,
+	WakeRunnerOptions,
+	WakeSchedulerOptions,
+	WakeSessionReference,
+	WakeSource,
+	WakeStatus,
+	WakeStore,
+	WakeTrigger,
+	WakeTriggerRuntime,
+} from "./wakeup/index.ts";
+export {
+	AgentWakeService,
+	createFileStateAdapter,
+	createOuterLoopClockExtension,
+	createOuterLoopTool,
+	createProcessStateAdapter,
+	DEFAULT_WAKE_POLICY,
+	FileStateAdapter,
+	findUnclosedWakeEvents,
+	InMemoryWakeJournal,
+	InMemoryWakeStore,
+	JsonlWakeJournal,
+	MonitorRegistry,
+	normalizeCreateWakeInput,
+	OuterLoopRuntime,
+	ProcessStateAdapter,
+	ProcessStateError,
+	WakePolicyError,
+	WakeRunner,
+	WakeScheduler,
+} from "./wakeup/index.ts";
 
 export {
 	withFileMutationQueue,
@@ -373,6 +455,19 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		sessionManager.appendThinkingLevelChange(thinkingLevel);
 	}
 
+	const customTools = [
+		...(options.customTools ?? []),
+		...(options.wakeup
+			? [
+					createOuterLoopTool({
+						store: options.wakeup.store,
+						monitorRegistry: options.wakeup.monitorRegistry ?? new MonitorRegistry(),
+						allowedRoot: cwd,
+					}),
+				]
+			: []),
+	];
+
 	const session = new AgentSession({
 		agent,
 		sessionManager,
@@ -380,7 +475,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		cwd,
 		scopedModels: options.scopedModels,
 		resourceLoader,
-		customTools: options.customTools,
+		customTools,
 		modelRuntime,
 		initialActiveToolNames,
 		allowedToolNames,

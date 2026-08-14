@@ -25,6 +25,12 @@
 	},
 	"files": {
 		"includes": [
+			"apps/*/electron/**/*.ts",
+			"apps/*/electron/**/*.cts",
+			"apps/*/renderer/*.ts",
+			"apps/*/renderer/src/**/*.ts",
+			"apps/*/renderer/src/**/*.tsx",
+			"apps/*/shared/**/*.ts",
 			"packages/*/src/**/*.ts",
 			"packages/*/test/**/*.ts",
 			"packages/session-backends/*/src/**/*.ts",

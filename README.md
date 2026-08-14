@@ -10,7 +10,13 @@
 
 > New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-# Pi Agent Harness
+# PI Outer Loop
+
+PI Outer Loop 是基于 Pi Agent Harness 的核心外循环扩展：在保留 Pi 原生 CLI、TUI、SDK、RPC、会话和插件兼容性的前提下，通过唯一的 `outer_loop` 工具提供定时、文件和进程唤醒能力。
+
+本仓库只发布核心代码，不包含桌面 GUI。没有外挂任务时，运行行为与原生 Pi 保持一致；现有 Pi 插件无需修改或适配。详细边界、启动方式和当前限制见 [README-OUTER-LOOP.md](README-OUTER-LOOP.md)。
+
+## Upstream Pi Agent Harness
 
 This is the home of the Pi agent harness project including our self extensible coding agent.
 
