@@ -59,6 +59,7 @@ import { assertValidSessionId, SessionManager } from "./core/session-manager.ts"
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
+import { OuterLoopRuntime } from "./core/wakeup/outer-loop-runtime.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
@@ -701,6 +702,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const trustStore = new ProjectTrustStore(agentDir);
 	const sessionCwd = sessionManager.getCwd();
+	let outerLoopRuntime: OuterLoopRuntime | undefined;
 	const autoTrustOnReloadCwd =
 		parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
 			? sessionCwd
@@ -773,7 +775,10 @@ export async function main(args: string[], options?: MainOptions) {
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
-				extensionFactories,
+				extensionFactories:
+					outerLoopRuntime && !parsed.noTools
+						? [...extensionFactories, outerLoopRuntime.createClockExtension(() => sessionManager.getSessionId())]
+						: extensionFactories,
 			},
 		});
 		const { settingsManager, modelRuntime, resourceLoader } = services;
@@ -826,7 +831,10 @@ export async function main(args: string[], options?: MainOptions) {
 			tools: sessionOptions.tools,
 			excludeTools: sessionOptions.excludeTools,
 			noTools: sessionOptions.noTools,
-			customTools: sessionOptions.customTools,
+			customTools: [
+				...(sessionOptions.customTools ?? []),
+				...(outerLoopRuntime && !parsed.noTools ? [outerLoopRuntime.createTool(cwd)] : []),
+			],
 		});
 		const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
 		if (created.session.model && cliThinkingOverride) {
@@ -839,12 +847,32 @@ export async function main(args: string[], options?: MainOptions) {
 			diagnostics,
 		};
 	};
+	outerLoopRuntime =
+		appMode === "interactive"
+			? new OuterLoopRuntime({
+					cwd: sessionCwd,
+					agentDir,
+					createSession: async (sessionFile, cwd) => {
+						const restored = await createRuntime({
+							cwd,
+							agentDir,
+							sessionManager: SessionManager.open(sessionFile, sessionDir, cwd),
+							sessionStartEvent: { type: "session_start", reason: "resume" },
+						});
+						return restored.session;
+					},
+					createToolForSession: (_sessionFile, cwd) =>
+						!parsed.noTools ? outerLoopRuntime?.createTool(cwd) : undefined,
+				})
+			: undefined;
 	time("createRuntime");
 	const runtime = await createAgentSessionRuntime(createRuntime, {
 		cwd: sessionManager.getCwd(),
 		agentDir,
 		sessionManager,
 	});
+	outerLoopRuntime?.bindSession(runtime.session);
+	outerLoopRuntime?.start();
 	time("createAgentSessionRuntime");
 	const { services, session, modelFallbackMessage } = runtime;
 	const { settingsManager, modelRuntime, resourceLoader } = services;
@@ -925,6 +953,7 @@ export async function main(args: string[], options?: MainOptions) {
 		await runRpcMode(runtime);
 	} else if (appMode === "interactive") {
 		const interactiveMode = new InteractiveMode(runtime, {
+			outerLoopRuntime,
 			migratedProviders,
 			modelFallbackMessage,
 			autoTrustOnReloadCwd,

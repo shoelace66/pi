@@ -262,4 +262,17 @@ describe("FooterDataProvider reftable branch detection", () => {
 			vi.useRealTimers();
 		}
 	});
+
+	it("reports no visible change when an extension repeats the same status", () => {
+		const provider = new FooterDataProvider(tempDir);
+		try {
+			expect(provider.setExtensionStatus("outer-loop", "outer loop: 1 armed")).toBe(true);
+			expect(provider.setExtensionStatus("outer-loop", "outer loop: 1 armed")).toBe(false);
+			expect(provider.setExtensionStatus("outer-loop", "outer loop: 0 armed")).toBe(true);
+			expect(provider.setExtensionStatus("outer-loop", undefined)).toBe(true);
+			expect(provider.setExtensionStatus("outer-loop", undefined)).toBe(false);
+		} finally {
+			provider.dispose();
+		}
+	});
 });

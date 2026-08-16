@@ -125,6 +125,15 @@ describe("parseArgs", () => {
 			expect(result.mode).toBe("rpc");
 		});
 
+		test("rejects the removed server mode", () => {
+			const result = parseArgs(["--mode", "server"]);
+			expect(result.mode).toBeUndefined();
+			expect(result.diagnostics).toContainEqual({
+				type: "error",
+				message: 'Invalid mode "server". Valid values: text, json, rpc',
+			});
+		});
+
 		test("parses --session", () => {
 			const result = parseArgs(["--session", "/path/to/session.jsonl"]);
 			expect(result.session).toBe("/path/to/session.jsonl");

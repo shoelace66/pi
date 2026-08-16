@@ -99,6 +99,7 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import type { InMemoryWakeStats, OuterLoopRuntime } from "../../core/wakeup/outer-loop-runtime.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
@@ -313,6 +314,8 @@ function formatLoginProviderCompletionDescription(provider: LoginProviderComplet
  * Options for InteractiveMode initialization.
  */
 export interface InteractiveModeOptions {
+	/** Process-local outer-loop runtime owned by the CLI host. */
+	outerLoopRuntime?: OuterLoopRuntime;
 	/** Providers that were migrated to auth.json (shows warning) */
 	migratedProviders?: string[];
 	/** Warning message if session model couldn't be restored */
@@ -505,6 +508,7 @@ export class InteractiveMode {
 	private customHeader: (Component & { dispose?(): void }) | undefined = undefined;
 
 	private options: InteractiveModeOptions;
+	private outerLoopUnsubscribe?: () => void;
 	private readonly onRightClickPaste = (): void => {
 		void this.handleRightClickPaste();
 	};
@@ -531,10 +535,12 @@ export class InteractiveMode {
 		this.options = { ...options, tuiMode };
 		this.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
 		this.runtimeHost.setBeforeSessionInvalidate(() => {
+			if (options.outerLoopRuntime) options.outerLoopRuntime.unbindSession(this.session.sessionFile);
 			this.resetExtensionUI();
 		});
 		this.runtimeHost.setRebindSession(async () => {
 			await this.rebindCurrentSession({ renderBeforeBind: true });
+			options.outerLoopRuntime?.bindSession(this.session);
 		});
 		this.version = VERSION;
 		this.renderer = createInteractiveTui({
@@ -572,6 +578,7 @@ export class InteractiveMode {
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerContainer = new Container();
 		this.footerContainer.addChild(this.footer);
+		if (options.outerLoopRuntime) this.subscribeToOuterLoop(options.outerLoopRuntime);
 
 		// Load hide thinking block setting
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -1091,7 +1098,7 @@ export class InteractiveMode {
 		while (true) {
 			const userInput = await this.getUserInput();
 			try {
-				await this.session.prompt(userInput);
+				await this.withOuterLoopLock(() => this.session.prompt(userInput));
 			} catch (error: unknown) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 				this.showError(errorMessage);
@@ -2039,8 +2046,29 @@ export class InteractiveMode {
 	 * Set extension status text in the footer.
 	 */
 	private setExtensionStatus(key: string, text: string | undefined): void {
-		this.footerDataProvider.setExtensionStatus(key, text);
-		this.ui.requestRender();
+		if (this.footerDataProvider.setExtensionStatus(key, text)) this.ui.requestRender();
+	}
+
+	private subscribeToOuterLoop(runtime: OuterLoopRuntime): void {
+		// Seed the footer before the first render without scheduling a constructor-time redraw.
+		this.footerDataProvider.setExtensionStatus("outer-loop", this.formatOuterLoopStatus(runtime.getStats()));
+		this.outerLoopUnsubscribe = runtime.subscribe((event) => {
+			if (event.type === "changed") {
+				this.setExtensionStatus("outer-loop", this.formatOuterLoopStatus(event.stats));
+			} else if (event.type === "wake_started") {
+				this.showStatus(`Outer loop resumed ${event.job.session.id.slice(0, 8)}: ${event.job.reason}`);
+			} else if (event.type === "wake_finished" && event.job.status !== "completed") {
+				this.showWarning(`Outer loop ${event.job.id} ended as ${event.job.status}`);
+			}
+		});
+	}
+
+	private formatOuterLoopStatus({ armed, ready, running, monitorErrors }: InMemoryWakeStats): string {
+		const parts = [`${armed} armed`];
+		if (ready > 0) parts.push(`${ready} ready`);
+		if (running > 0) parts.push(`${running} running`);
+		if (monitorErrors > 0) parts.push(`${monitorErrors} monitor errors`);
+		return `outer loop: ${parts.join(" · ")}`;
 	}
 
 	private showStatusIndicator(indicator: StatusIndicator): void {
@@ -3037,7 +3065,7 @@ export class InteractiveMode {
 			if (this.session.isStreaming) {
 				this.editor.addToHistory?.(text);
 				this.editor.setText("");
-				await this.session.prompt(text, { streamingBehavior: "steer" });
+				await this.withOuterLoopLock(() => this.session.prompt(text, { streamingBehavior: "steer" }));
 				this.updatePendingMessagesDisplay();
 				this.ui.requestRender();
 				return;
@@ -3054,6 +3082,12 @@ export class InteractiveMode {
 			}
 			this.editor.addToHistory?.(text);
 		};
+	}
+
+	private async withOuterLoopLock<T>(task: () => Promise<T>): Promise<T> {
+		const file = this.session.sessionFile;
+		if (!file || !this.options.outerLoopRuntime) return task();
+		return this.options.outerLoopRuntime.runExclusive(file, task);
 	}
 
 	private subscribeToAgent(): void {
@@ -3787,6 +3821,7 @@ export class InteractiveMode {
 			// terminal. If the terminal is gone, the restore writes below emit EIO,
 			// which the stdout/stderr error handler turns into emergencyTerminalExit;
 			// the render loop is already idle, so this cannot hot-spin (see #4144).
+			await this.options?.outerLoopRuntime?.stop();
 			await this.runtimeHost.dispose();
 			this.themeController.disableAutoSync();
 			await this.ui.terminal.drainInput(1000);
@@ -3803,6 +3838,7 @@ export class InteractiveMode {
 		await this.ui.terminal.drainInput(1000);
 
 		this.stop();
+		await this.options?.outerLoopRuntime?.stop();
 		await this.runtimeHost.dispose();
 
 		const resumeCommand = formatResumeCommand(this.sessionManager);
@@ -3953,7 +3989,7 @@ export class InteractiveMode {
 			if (this.isExtensionCommand(text)) {
 				this.editor.addToHistory?.(text);
 				this.editor.setText("");
-				await this.session.prompt(text);
+				await this.withOuterLoopLock(() => this.session.prompt(text));
 			} else {
 				this.queueCompactionMessage(text, "followUp");
 			}
@@ -3965,7 +4001,7 @@ export class InteractiveMode {
 		if (this.session.isStreaming) {
 			this.editor.addToHistory?.(text);
 			this.editor.setText("");
-			await this.session.prompt(text, { streamingBehavior: "followUp" });
+			await this.withOuterLoopLock(() => this.session.prompt(text, { streamingBehavior: "followUp" }));
 			this.updatePendingMessagesDisplay();
 			this.ui.requestRender();
 		}
@@ -6378,6 +6414,8 @@ export class InteractiveMode {
 	}
 
 	stop(fullscreenExitOutput = this.settingsManager.getFullscreenExitOutput()): void {
+		this.outerLoopUnsubscribe?.();
+		this.outerLoopUnsubscribe = undefined;
 		this.disposeActiveSelector();
 		if (this.settingsManager.getShowTerminalProgress()) {
 			this.ui.terminal.setProgress(false);

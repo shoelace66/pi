@@ -1,0 +1,60 @@
+name: Outer Loop issue
+description: Report a reproducible timer, monitor, wake, clock, or cancellation issue
+title: "[outer-loop] "
+labels: ["outer-loop"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep the report concrete and reproducible. Do not include API keys, session contents, or private paths.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - wait_time
+        - wait_file
+        - wait_process
+        - wake dispatch
+        - clock prompt
+        - cancellation
+        - journal or recovery
+        - native extension compatibility
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the exact action payload, command, and the observed result.
+      placeholder: |
+        1. Start pi with ...
+        2. Ask the agent to call outer_loop with ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: "e.g. pi-outer-loop-core or a commit SHA"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redact secrets and private data before pasting logs.
+    validations:
+      required: false

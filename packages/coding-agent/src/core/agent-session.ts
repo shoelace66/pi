@@ -952,7 +952,7 @@ export class AgentSession {
 	}
 
 	/** All messages including custom types like BashExecutionMessage */
-	get messages(): AgentMessage[] {
+	get messages(): Array<AgentMessage & { details?: unknown }> {
 		return this.agent.state.messages;
 	}
 
@@ -1436,7 +1436,13 @@ export class AgentSession {
 	 */
 	async sendCustomMessage<T = unknown>(
 		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
-		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+		options?: {
+			triggerTurn?: boolean;
+			deliverAs?: "steer" | "followUp" | "nextTurn";
+			/** Run the native before_agent_start chain for a triggered custom turn. */
+			preflight?: boolean;
+			runBeforeAgentStart?: boolean;
+		},
 	): Promise<void> {
 		const appMessage = {
 			role: "custom" as const,
@@ -1456,7 +1462,44 @@ export class AgentSession {
 				this.agent.steer(appMessage);
 			}
 		} else if (options?.triggerTurn) {
-			await this._runAgentPrompt(appMessage);
+			if (options.preflight || options.runBeforeAgentStart) {
+				try {
+					const messages: AgentMessage[] = [appMessage];
+					const prompt = contentText(appMessage.content, "");
+					const result = await this._extensionRunner.emitBeforeAgentStart(
+						prompt,
+						undefined,
+						this._baseSystemPrompt,
+						this._baseSystemPromptOptions,
+					);
+					if (result?.messages) {
+						for (const msg of result.messages) {
+							messages.push({
+								role: "custom",
+								customType: msg.customType,
+								content: msg.content ?? [],
+								display: msg.display,
+								details: msg.details,
+								timestamp: Date.now(),
+							});
+						}
+					}
+					if (result?.systemPrompt !== undefined) {
+						this._systemPromptOverride = result.systemPrompt;
+						this.agent.state.systemPrompt = result.systemPrompt;
+					} else {
+						this._systemPromptOverride = undefined;
+						this.agent.state.systemPrompt = this._baseSystemPrompt;
+					}
+					await this._runAgentPrompt(messages);
+				} catch (error) {
+					this._systemPromptOverride = undefined;
+					this.agent.state.systemPrompt = this._baseSystemPrompt;
+					throw error;
+				}
+			} else {
+				await this._runAgentPrompt(appMessage);
+			}
 		} else {
 			this.agent.state.messages.push(appMessage);
 			this.sessionManager.appendCustomMessageEntry(
