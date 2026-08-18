@@ -1,8 +1,8 @@
 # Pi Outer Loop：命令行 Agent 外循环
 
-> 当前状态说明，更新于 2026-08-14。
+> 当前状态说明，更新于 2026-08-18。
 
-本仓库当前处于“核心第二次升级”阶段：产品行为是原生 Pi 加一个 `outer_loop` 工具。外循环与 agent loop 解耦，任务在同一进程内并行等待；Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `AgentWakeService` 恢复目标 Pi session 执行一轮。
+本仓库当前处于“核心第二次开发收尾完成、第三次开发准备”阶段：产品行为是原生 Pi 加一个 `outer_loop` 工具。外循环与 agent loop 解耦，任务在同一进程内并行等待；Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `AgentWakeService` 恢复目标 Pi session 执行一轮。
 
 本轮已落地原生兼容边界：没有外挂任务时不追加 clock prompt；原生 CLI/TUI/SDK/RPC、扩展生命周期、provider、session 和资源机制继续由 Pi 处理，插件无需感知或适配 WakeService。GUI、跨重启调度和真实 multi-agent 不在本轮范围。
 
@@ -286,8 +286,6 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 - intent-level `outer_loop`、clock、用户取消和 journal recovery notice。
 - 外循环重复轮询不再重复触发 TUI 状态重绘。
 
-详细实机记录见 [outer-loop-live-test-2026-08-13.md](outer-loop-live-test-2026-08-13.md)。该报告由 agent 生成，时间线和主要任务结果已经通过 session 日志复核；其中的原因判断和改进建议仍应结合源码单独审核。
-
 当前相关测试主要位于：
 
 - `packages/coding-agent/test/wakeup.test.ts`
@@ -300,11 +298,11 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 
 ## 9. 相关文档
 
-- [外循环实机测试报告](outer-loop-live-test-2026-08-13.md)
-- [自唤醒与事件监测技术方案](docs/self-wakeup.md)
-- [早期修改审核说明](docs/outer-loop-change-audit.md)
+- [项目总览](README.md)
+- [上游关系与许可证说明](UPSTREAM.md)
+- [贡献指南](CONTRIBUTING.md)
 
-`docs/outer-loop-change-audit.md` 记录的是早期 server 方案，包含已经废弃的 `--mode server`，不能作为当前启动说明。
+历史测试报告和早期 GUI/server 设计稿不属于当前核心公开接口；如需复核实现，应以源码和当前回归测试为准。
 
 ## 10. 开发原则
 

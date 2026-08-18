@@ -195,6 +195,110 @@ describe("openai-completions tool_choice", () => {
 		expect("strict" in (tool ?? {})).toBe(false);
 	});
 
+	it("sanitizes all tool schemas for Moonshot without mutating the source", async () => {
+		const model = getModel("moonshotai", "kimi-k2.6")!;
+		const parameters = {
+			type: "object",
+			properties: {
+				size: { anyOf: [{ type: "string" }, { type: "array", items: true }] },
+			},
+			anyOf: [{ required: ["size"] }],
+		};
+		const original = JSON.parse(JSON.stringify(parameters));
+		let payload: unknown;
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Call schema_tool", timestamp: Date.now() }],
+				tools: [{ name: "schema_tool", description: "schema", parameters } as unknown as Tool],
+			},
+			{
+				apiKey: "test",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			} as unknown as Parameters<typeof streamSimple>[2],
+		).result();
+
+		const tool = (
+			(payload ?? mockState.lastParams) as {
+				tools?: Array<{ function?: { parameters?: unknown; strict?: unknown } }>;
+			}
+		).tools?.[0]?.function;
+		const sanitized = tool?.parameters as Record<string, unknown>;
+		expect(sanitized).toMatchObject({
+			type: "object",
+			properties: {
+				size: {
+					anyOf: [{ type: "string" }, { type: "array", items: { type: "object", additionalProperties: true } }],
+				},
+			},
+		});
+		expect(sanitized).not.toHaveProperty("anyOf");
+		expect(tool?.strict).toBeUndefined();
+		expect(parameters).toEqual(original);
+	});
+
+	it("keeps DeepSeek tool schemas untouched while retaining the existing strict flag behavior", async () => {
+		const model = getModel("deepseek", "deepseek-v4-flash")!;
+		const parameters = {
+			type: "object",
+			anyOf: [{ type: "object", properties: { value: { type: "string" } } }],
+		};
+		let payload: unknown;
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Call schema_tool", timestamp: Date.now() }],
+				tools: [{ name: "schema_tool", description: "schema", parameters } as unknown as Tool],
+			},
+			{
+				apiKey: "test",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			} as unknown as Parameters<typeof streamSimple>[2],
+		).result();
+
+		const tool = (
+			(payload ?? mockState.lastParams) as {
+				tools?: Array<{ function?: { parameters?: unknown; strict?: unknown } }>;
+			}
+		).tools?.[0]?.function;
+		expect(tool?.parameters).toBe(parameters);
+		expect(tool?.strict).toBe(false);
+	});
+
+	it("allows explicit Moonshot schema format for custom endpoints", async () => {
+		const baseModel = getModel("openai", "gpt-4o-mini")!;
+		const model = { ...baseModel, api: "openai-completions", compat: { toolSchemaFormat: "moonshot" } } as const;
+		const parameters = { type: "object", anyOf: [{ type: "object", properties: { value: { type: "string" } } }] };
+		let payload: unknown;
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Call schema_tool", timestamp: Date.now() }],
+				tools: [{ name: "schema_tool", description: "schema", parameters } as unknown as Tool],
+			},
+			{
+				apiKey: "test",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			} as unknown as Parameters<typeof streamSimple>[2],
+		).result();
+
+		const tool = ((payload ?? mockState.lastParams) as { tools?: Array<{ function?: { parameters?: unknown } }> })
+			.tools?.[0]?.function;
+		expect(tool?.parameters).toMatchObject({
+			type: "object",
+			properties: { value: { type: "string" } },
+		});
+	});
+
 	it("maps Groq Qwen reasoning levels to default reasoning_effort", async () => {
 		const model = getModel("groq", "qwen/qwen3.6-27b")!;
 		let payload: unknown;
