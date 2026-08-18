@@ -592,6 +592,8 @@ export interface OpenAICompletionsCompat {
 	supportsOpenAIGrammarTools?: boolean;
 	/** Whether the provider supports the `strict` field in tool definitions. Default: true. */
 	supportsStrictMode?: boolean;
+	/** Tool parameter schema dialect for provider-specific OpenAI-compatible endpoints. */
+	toolSchemaFormat?: "moonshot";
 	/** Cache control convention for prompt caching. "anthropic" applies Anthropic-style `cache_control` markers to the system prompt, last tool definition, and last user, assistant, or tool-result text content. */
 	cacheControlFormat?: "anthropic";
 	/** Whether to send session-affinity data from `options.sessionId`. Default: false. */

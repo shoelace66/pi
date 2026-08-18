@@ -20,6 +20,12 @@
 
 > **Status:** core-first, in-process, and experimental. This repository publishes the core runtime only; GUI and desktop code are intentionally out of scope.
 
+## Project identity
+
+**PI Outer Loop** is a standalone, core-focused Pi distribution that adds a unified background wakeup capability while preserving Pi's native agent experience. It is intended for developers who want an agent to keep working while waiting for time, files, or processes, then resume the same Pi session when the condition is met.
+
+This repository is based on [Pi](https://github.com/earendil-works/pi), an MIT-licensed project by Mario Zechner and contributors. The upstream Pi code and license notices are retained; the changes and additions maintained here are documented in [UPSTREAM.md](UPSTREAM.md). The repository is not a replacement for Pi's extension API and does not require existing Pi plugins to be rewritten.
+
 ## What this project adds
 
 PI Outer Loop keeps Pi's normal interaction model and adds one model-facing tool, `outer_loop`:
@@ -35,6 +41,25 @@ PI Outer Loop keeps Pi's normal interaction model and adds one model-facing tool
 The scheduler runs alongside the agent. Creating a wake job does not put the session to sleep: the agent can keep accepting user turns, and an obsolete job can be cancelled by either the agent or the user.
 
 When a job is active, a small dynamic clock is appended to the end of the system prompt for normal and wake turns. With no active jobs, no clock text is added.
+
+## What changed from upstream Pi
+
+| Area | PI Outer Loop change |
+| --- | --- |
+| Background work | Added the `outer_loop` intent-level tool for timers, file state, process exit, listing, and cancellation. |
+| Wake dispatch | Added `AgentWakeService`, settled-session queuing, request-id deduplication, unified wake prompts, and journaled wake events. |
+| Prompt integration | Added a final clock extension and wake-turn preflight without replacing Pi's agent loop or extension lifecycle. |
+| Provider boundary | Added an optional Moonshot MFJS Schema compatibility copy; registered plugin schemas remain unchanged. |
+| Verification | Added scheduler, monitor, cancellation, extension, provider, MCP-fixture, and native-compatibility regression coverage. |
+
+## Current status
+
+| Status | Scope |
+| --- | --- |
+| Available | Core in-process wake jobs, native CLI/TUI/SDK/RPC flows, extension compatibility, journal records, and Moonshot tool-schema compatibility. |
+| Experimental | The project is still evolving and should be treated as a development release rather than a hosted scheduling service. |
+| Not included | GUI/desktop design, cross-restart scheduling, durable task restoration, bundled MCP transport, authentication handoff, and real multi-agent routing. |
+| Next focus | Authentication handoff/resume and the third-development integration plan, while keeping the Pi compatibility boundary stable. |
 
 ## Compatibility contract
 
@@ -179,6 +204,6 @@ Read [AGENTS.md](AGENTS.md) before making code changes. Keep GUI artifacts and g
 
 ## Upstream and license
 
-This project is built on the Pi Agent Harness packages and keeps their MIT licensing and attribution. See [upstream Pi](https://github.com/earendil-works/pi) for the base project and [LICENSE](LICENSE) for the complete license text.
+This project is built on the Pi Agent Harness packages and keeps their MIT licensing and attribution. See [UPSTREAM.md](UPSTREAM.md), [upstream Pi](https://github.com/earendil-works/pi), and [LICENSE](LICENSE) for the source relationship and complete license text.
 
 PI Outer Loop is released under the MIT License.

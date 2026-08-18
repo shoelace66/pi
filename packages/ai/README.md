@@ -1174,6 +1174,7 @@ interface OpenAICompletionsCompat {
   supportsReasoningEffort?: boolean; // Whether provider supports `reasoning_effort` (default: true)
   supportsUsageInStreaming?: boolean; // Whether provider supports `stream_options: { include_usage: true }` (default: true)
   supportsStrictMode?: boolean;      // Whether provider supports `strict` in tool definitions (default: true)
+  toolSchemaFormat?: 'moonshot';      // Sanitize function parameters to Moonshot MFJS (default: auto-detected for Moonshot)
   supportsOpenAIGrammarTools?: boolean; // Whether to emit OpenAI custom Lark/regex grammar tools; false falls back to normal function tools (default: false; the generated catalog enables it for capable models)
   sendSessionAffinityHeaders?: boolean; // Send session-affinity data from `sessionId` (default: false)
   sessionAffinityFormat?: 'openai' | 'openai-nosession' | 'openrouter'; // Format for session affinity: 'openai' uses `prompt_cache_key`, `session_id`, `x-client-request-id`, and `x-session-affinity`; 'openai-nosession' uses `prompt_cache_key`, `x-client-request-id`, and `x-session-affinity`; 'openrouter' uses `x-session-id` (default: auto-detected)
@@ -1198,6 +1199,10 @@ interface OpenAIResponsesCompat {
   supportsOpenAIGrammarTools?: boolean; // Whether to emit OpenAI custom Lark/regex grammar tools; false falls back to normal function tools (default: false; the generated catalog enables it for capable models)
 }
 ```
+
+When `toolSchemaFormat: 'moonshot'` is active, only the copy placed in the outgoing OpenAI-compatible request is converted to Moonshot Flavored JSON Schema (MFJS); the registered tool schema remains unchanged for extension validation and execution. Moonshot models are detected automatically from the built-in provider ids and Moonshot URLs.
+
+The conversion follows the [official Moonshot MFJS specification](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md): nested `anyOf`, object properties, arrays, `description`, `default`, and root-level `$defs`/internal `$ref` are supported. String and numeric `const` values are represented as single-value `enum` entries. Because Moonshot tool parameters must be an object, a root union whose branches are all objects is flattened into one object wire schema; the canonical schema remains authoritative at runtime. Unsupported `oneOf`, external references, nested `$defs`, unsafe boolean schemas, primitive root unions, and unsupported enum values fail locally with the tool name and schema path instead of being sent to the provider.
 
 If `compat` is not set, the library falls back to URL-based detection. If `compat` is partially set, unspecified fields use the detected defaults. This is useful for:
 
