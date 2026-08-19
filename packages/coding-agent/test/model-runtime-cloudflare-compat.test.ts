@@ -56,10 +56,14 @@ async function createCloudflareRuntime(): Promise<{ modelRuntime: ModelRuntime; 
 	return { modelRuntime, modelRegistry: new ModelRegistry(modelRuntime) };
 }
 
+function findWorkersAiModel(runtime: ModelRuntime) {
+	return runtime.getModels("cloudflare-ai-gateway").find((candidate) => candidate.id.startsWith("workers-ai/"));
+}
+
 describe("ModelRegistry Cloudflare compat streaming", () => {
 	it("materializes the Cloudflare endpoint through ModelRuntime streaming", async () => {
 		const { modelRuntime } = await createCloudflareRuntime();
-		const model = modelRuntime.getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.5");
+		const model = findWorkersAiModel(modelRuntime);
 		expect(model).toBeDefined();
 
 		resetApiProviders();
@@ -74,8 +78,8 @@ describe("ModelRegistry Cloudflare compat streaming", () => {
 	});
 
 	it("materializes the Cloudflare endpoint after extension-style auth resolution", async () => {
-		const { modelRegistry } = await createCloudflareRuntime();
-		const model = modelRegistry.find("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.5");
+		const { modelRuntime, modelRegistry } = await createCloudflareRuntime();
+		const model = findWorkersAiModel(modelRuntime);
 		expect(model).toBeDefined();
 
 		resetApiProviders();

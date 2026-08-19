@@ -23,6 +23,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Install search tools
+        run: |
+          sudo apt-get install -y --no-install-recommends fd-find ripgrep
+          sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
