@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { complete, getModel } from "../src/compat.ts";
+import { complete, getModel, getModels } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions, Usage } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
@@ -222,10 +222,13 @@ describe("totalTokens field", () => {
 
 	describe.skipIf(!process.env.GEMINI_API_KEY)("Google", () => {
 		it(
-			"gemini-2.0-flash - should return totalTokens equal to sum of components",
+			"Google model - should return totalTokens equal to sum of components",
 			{ retry: 3, timeout: 60000 },
 			async () => {
-				const llm = getModel("google", "gemini-2.0-flash");
+				const llm = getModels("google").find(
+					(candidate) => candidate.id === "gemini-2.5-flash" || candidate.id.startsWith("gemini-"),
+				);
+				if (!llm) throw new Error("No Google Gemini models available");
 
 				console.log(`\nGoogle / ${llm.id}:`);
 				const { first, second } = await testTotalTokensWithCache(llm);

@@ -4,7 +4,7 @@ import { dirname, join } from "path";
 import { Type } from "typebox";
 import { fileURLToPath } from "url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { complete, getModel, stream } from "../src/compat.ts";
+import { complete, getModel, getModels, stream } from "../src/compat.ts";
 import type { Api, Context, ImageContent, Model, StreamOptions, Tool, ToolResultMessage } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
@@ -702,9 +702,10 @@ describe("Generate E2E Tests", () => {
 	);
 
 	describe.skipIf(!hasCloudflareAiGatewayCredentials() || !process.env.ANTHROPIC_API_KEY)(
-		"Cloudflare AI Gateway → Anthropic BYOK (claude-sonnet-4-5 via /anthropic messages)",
+		"Cloudflare AI Gateway → Anthropic BYOK (available Claude Sonnet via /anthropic messages)",
 		() => {
-			const llm = getModel("cloudflare-ai-gateway", "claude-sonnet-4-5");
+			const llm = getModels("cloudflare-ai-gateway").find((candidate) => candidate.id.startsWith("claude-sonnet-"));
+			if (!llm) throw new Error("No Claude Sonnet models available through Cloudflare AI Gateway");
 			const options = { headers: { Authorization: `Bearer ${process.env.ANTHROPIC_API_KEY}` } };
 			const thinkingOptions = {
 				...options,
