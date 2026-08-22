@@ -82,6 +82,7 @@ import type {
 	ReadToolInput,
 	WriteToolInput,
 } from "../tools/index.ts";
+import type { WakeContext } from "../wake/types.ts";
 
 export type { ExecOptions, ExecResult } from "../exec.ts";
 export type { BuildSystemPromptOptions } from "../system-prompt.ts";
@@ -315,6 +316,8 @@ export interface ExtensionContext {
 	cwd: string;
 	/** Session manager (read-only) */
 	sessionManager: ReadonlySessionManager;
+	/** Optional process-local Wake service. Present only when the host explicitly enables Wake for this session. */
+	wake?: WakeContext;
 	/** Model registry for API key resolution */
 	modelRegistry: ModelRegistry;
 	/** Current model (may be undefined) */
@@ -1657,6 +1660,7 @@ export interface ExtensionContextActions {
 	compact: (options?: CompactOptions) => void;
 	getSystemPrompt: () => string;
 	getSystemPromptOptions?: () => BuildSystemPromptOptions;
+	getWakeContext?: () => WakeContext | undefined;
 }
 
 /**

@@ -1,0 +1,40 @@
+AutoPi 0.84.1 - 开始使用
+========================
+
+这是 Windows 64 位绿色免安装版。
+
+1. 请先完整解压 ZIP，不要直接在压缩包预览窗口中运行。
+2. 双击 AutoPi.exe。
+3. 点击“打开文件夹”，选择希望 AutoPi 协助处理的目录。
+4. 按界面提示选择模型，并配置对应服务商的 API Key 或登录信息。
+5. 直接用日常语言描述任务即可。
+
+示例：
+  先检查这个项目，告诉我如何启动和当前有哪些问题，不要修改文件。
+
+Auto 能力示例：
+  运行构建；如果进程还没结束就等待它，结束后检查错误并继续修复。
+  等 report.json 被修改后读取它并生成中文总结。
+  20 分钟后继续检查最新日志。
+
+重要提醒：
+- AutoPi 不是沙箱，拥有当前 Windows 用户的文件和进程权限。
+- 第一次使用建议选择一个已备份、不含敏感信息的测试目录。
+- 不要把 API Key、密码或私人数据粘贴到公开 Issue 或截图中。
+- 完全退出 AutoPi 后，尚未触发的等待任务目前不会自动恢复。
+- Windows SmartScreen 可能提示未知发布者；请先确认文件来自官方仓库 Release，并核对 SHA-256。
+
+命令行入口（普通用户可忽略）：
+- autopi.cmd：AutoPi CLI
+- pi.cmd：Pi 兼容入口
+- pi-wake.cmd：向在线会话发送 Wake 事件
+
+详细教程：
+https://github.com/shoelace66/AutoPi/blob/main/docs/GETTING-STARTED.zh-CN.md
+
+问题反馈：
+https://github.com/shoelace66/AutoPi/issues
+
+来源与许可证：
+AutoPi 于 2026-08-20 从 https://github.com/earendil-works/pi 分叉并独立维护。
+详见随包 LICENSE-AUTOPI.txt、BUILD-MANIFEST.txt 与仓库 UPSTREAM.md。

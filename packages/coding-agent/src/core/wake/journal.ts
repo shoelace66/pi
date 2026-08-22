@@ -1,9 +1,10 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { JsonValue, WakeSource } from "./types.ts";
+import type { JsonValue } from "./types.ts";
 
 export type WakeJournalKind =
 	| "accepted"
+	| "duplicate"
 	| "queued"
 	| "dispatching"
 	| "completed"
@@ -11,13 +12,14 @@ export type WakeJournalKind =
 	| "blocked"
 	| "cancelled"
 	| "rejected"
+	| "revoked"
 	| "recovery_notice_delivered";
 
 export type WakeJournalEvent = {
 	kind: WakeJournalKind;
-	wakeId?: string;
+	resourceId?: string;
 	requestId?: string;
-	source?: WakeSource;
+	source?: JsonValue;
 	target?: JsonValue;
 	content?: JsonValue;
 	error?: JsonValue;
@@ -30,7 +32,6 @@ export type WakeJournalEnvelope = WakeJournalEvent & { seq: number; at: string }
 export interface WakeJournal {
 	append(event: WakeJournalEvent): Promise<number>;
 	read(): Promise<WakeJournalEnvelope[]>;
-	/** Human-readable path for recovery notices; memory journals have none. */
 	readonly path?: string;
 }
 
@@ -52,12 +53,12 @@ export class InMemoryWakeJournal implements WakeJournal {
 const CLOSED_KINDS = new Set<WakeJournalKind>(["completed", "cancelled", "rejected"]);
 
 export type WakeRecoveryNotice = {
-	wakeId: string;
+	resourceId: string;
 	lastKind: WakeJournalKind;
 	journalPath?: string;
 };
 
-/** Find wake records that were still open when the process stopped. */
+/** Report resources whose last journal event was not terminal. Nothing is resumed. */
 export function findUnclosedWakeEvents(
 	events: WakeJournalEnvelope[],
 	sessionId?: string,
@@ -65,28 +66,31 @@ export function findUnclosedWakeEvents(
 ): WakeRecoveryNotice[] {
 	const targets = new Map<string, string | undefined>();
 	const latest = new Map<string, WakeJournalKind>();
-	for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
-		if (!event.wakeId) continue;
+	for (const event of [...events].sort((left, right) => left.seq - right.seq)) {
+		const resourceId = event.resourceId;
+		if (!resourceId) continue;
 		if (event.kind === "accepted") {
-			const target = event.target as { id?: unknown; session?: { id?: unknown } } | undefined;
+			const target = event.target as { id?: unknown; sessionId?: unknown; session?: { id?: unknown } } | undefined;
 			targets.set(
-				event.wakeId,
-				typeof target?.session?.id === "string"
-					? target.session.id
-					: typeof target?.id === "string"
-						? target.id
-						: undefined,
+				resourceId,
+				typeof target?.sessionId === "string"
+					? target.sessionId
+					: typeof target?.session?.id === "string"
+						? target.session.id
+						: typeof target?.id === "string"
+							? target.id
+							: undefined,
 			);
 		}
-		latest.set(event.wakeId, event.kind);
+		latest.set(resourceId, event.kind);
 	}
 	return [...latest.entries()]
-		.filter(([wakeId, kind]) => {
+		.filter(([resourceId, kind]) => {
 			if (CLOSED_KINDS.has(kind)) return false;
-			const target = targets.get(wakeId);
+			const target = targets.get(resourceId);
 			return sessionId === undefined || target === sessionId;
 		})
-		.map(([wakeId, lastKind]) => ({ wakeId, lastKind, journalPath }));
+		.map(([resourceId, lastKind]) => ({ resourceId, lastKind, journalPath }));
 }
 
 export type JsonlWakeJournalOptions = { agentDir?: string; filePath?: string };

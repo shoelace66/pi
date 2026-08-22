@@ -20,6 +20,7 @@ import { KeybindingsManager, type KeyId } from "../src/core/keybindings.ts";
 import type { ModelRegistry } from "../src/core/model-registry.ts";
 import type { ScopedModel } from "../src/core/model-resolver.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+import type { WakeContext } from "../src/core/wake/types.ts";
 
 describe("ExtensionRunner", () => {
 	let tempDir: string;
@@ -115,6 +116,19 @@ describe("ExtensionRunner", () => {
 			const scoped = [{ model: { id: "scoped-test" }, thinkingLevel: "high" }] as unknown as ScopedModel[];
 			runner.bindCore(extensionActions, { ...extensionContextActions, getScopedModels: () => scoped });
 			expect(runner.createContext().scopedModels).toBe(scoped);
+		});
+	});
+
+	describe("wake context", () => {
+		it("exposes the host-bound WakeContext lazily without registering a model tool", async () => {
+			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
+			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
+			const context = runner.createContext();
+			expect(context.wake).toBeUndefined();
+			const wake = { list: vi.fn(async () => []) } as unknown as WakeContext;
+			runner.bindCore(extensionActions, { ...extensionContextActions, getWakeContext: () => wake });
+			expect(context.wake).toBe(wake);
+			expect(runner.getAllRegisteredTools().some((tool) => tool.definition.name === "wake")).toBe(false);
 		});
 	});
 

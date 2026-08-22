@@ -12,6 +12,7 @@ import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import { WakeRuntime } from "../../../src/core/wake/runtime.ts";
 
 describe("regression #3592: no-builtin-tools keeps extension tools enabled", () => {
 	let tempDir: string;
@@ -115,5 +116,43 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 		expect(session.systemPrompt).toContain("Available tools:\n(none)");
 		expect(session.systemPrompt).not.toContain("- read:");
 		session.dispose();
+	});
+
+	it("keeps Wake available when tools and extensions are disabled", async () => {
+		const settingsManager = SettingsManager.create(tempDir, agentDir);
+		const sessionManager = SessionManager.create(tempDir, tempDir);
+		const resourceLoader = new DefaultResourceLoader({
+			cwd: tempDir,
+			agentDir,
+			settingsManager,
+			noExtensions: true,
+		});
+		await resourceLoader.reload();
+		const wakeRuntime = new WakeRuntime({ agentDir });
+		const { session } = await createAgentSession({
+			cwd: tempDir,
+			agentDir,
+			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			settingsManager,
+			sessionManager,
+			resourceLoader,
+			wakeRuntime,
+			noTools: "all",
+		});
+		try {
+			expect(session.getAllTools()).toEqual([]);
+			const wake = session.extensionRunner.createContext().wake;
+			expect(wake).toBeDefined();
+			const registration = await wake!.register({
+				requestKey: "no-tools",
+				producer: { id: "test" },
+				reason: "verify native Wake",
+				objective: "remain available",
+			});
+			expect(registration.signal.aborted).toBe(false);
+		} finally {
+			session.dispose();
+			await wakeRuntime.stop();
+		}
 	});
 });

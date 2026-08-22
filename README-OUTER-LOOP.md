@@ -1,10 +1,12 @@
-# Pi Outer Loop：命令行 Agent 外循环
+# AutoPi Wake / Outer Loop：Agent 外循环
 
-> 当前状态说明，更新于 2026-08-18。
+> 当前状态说明，更新于 2026-08-22。本文聚焦 AutoPi 的 Wake / Outer Loop 子系统；桌面产品与新手使用见 [README.md](README.md)。
 
-本仓库当前处于“核心第二次开发收尾完成、第三次开发准备”阶段：产品行为是原生 Pi 加一个 `outer_loop` 工具。外循环与 agent loop 解耦，任务在同一进程内并行等待；Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `AgentWakeService` 恢复目标 Pi session 执行一轮。
+AutoPi `0.84.1` 正式版保留 Pi 兼容的 agent loop，并增加一个统一 `outer_loop` 工具。外循环与 agent loop 解耦，任务在同一进程内并行等待；Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `WakeRuntime` 恢复目标 session 执行一轮。
 
-本轮已落地原生兼容边界：没有外挂任务时不追加 clock prompt；原生 CLI/TUI/SDK/RPC、扩展生命周期、provider、session 和资源机制继续由 Pi 处理，插件无需感知或适配 WakeService。GUI、跨重启调度和真实 multi-agent 不在本轮范围。
+本轮已落地原生兼容边界：没有活动等待任务时不追加 clock prompt；原生 CLI/TUI/SDK/RPC、扩展生命周期、provider、session 和资源机制继续由 Pi 处理，插件无需感知或适配 WakeService。AutoPi Desktop 已复用同一核心运行时；跨重启调度和真实 multi-agent 仍不在当前范围。
+
+当前仍有几个明确限制：认证完成后不会自动恢复被暂停的用户 turn，需要用户发送下一轮；Outer Loop 只在 interactive 模式启动，print/JSON/RPC 保持原生行为但不运行后台调度；唤醒任务只在当前进程内有效；MCP 只提供外部集成边界和 Schema fixture，不内置 server/transport；真实 Kimi/Moonshot 调用和 multi-agent 路由仍待后续开发。
 
 Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文只说明本项目新增的外循环能力和当前限制。
 
@@ -13,27 +15,29 @@ Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文
 系统分为两层：
 
 - **内循环**：位于 `packages/agent`，负责模型请求、工具调用、上下文推进和单次 agent turn。
-- **外循环**：位于 `packages/coding-agent/src/core/wakeup`，负责任务创建、定时或状态轮询、会话互斥以及自动恢复。
+- **Wake 基础设施**：位于 `packages/coding-agent/src/core/wake`，负责能力、队列、本地 IPC、统一消息和日志。
+- **外循环**：位于 `packages/coding-agent/src/core/outer-loop`，负责任务创建、定时或状态轮询、取消和自动恢复。
 
 本阶段没有改写 `packages/agent` 的 agent loop。外循环通过 Pi 已有的 custom tool、hidden inline extension 和可选的 custom-turn preflight 接入。
 
 ```text
-用户 <-> Pi TUI <-> AgentSession <-> agent loop
-                    ^
-                    |
-          outer_loop tool
-                    |
-       OuterLoopRuntime
-         |- outer_loop (intent-level)
-         |- InMemoryWakeStore + wake journal
-         |- WakeScheduler
-         |- AgentWakeService
-         |- hidden clock extension
-         |- file_state
-         `- process_state
+用户 <-> AutoPi Desktop / CLI <-> AgentSession <-> agent loop
+                                  ^
+                                  |
+                        outer_loop tool
+                                  |
+                       OuterLoopRuntime
+                         |- timer / file / process monitors
+                         |- scheduler + cancellation
+                         `- dynamic clock extension
+                                  |
+                            WakeRuntime
+                         |- session queues + capabilities
+                         |- local IPC + deduplication
+                         `- prompt + journal
 ```
 
-当前不包含 GUI、独立 server、跨进程队列或跨重启任务恢复。journal 只记录事件并提供恢复通知依据，不自动恢复进程结束时丢失的调度任务。旧的 `--mode server` 不是当前启动方式。
+Outer Loop 子系统不实现界面；AutoPi Desktop 和 CLI 都通过同一个 `AgentSession` 使用它。当前不包含独立托管 server、离线队列、跨机器传输或跨重启任务恢复。journal 只记录事件并提供审计信息，不自动恢复进程结束时丢失的调度任务。旧的 `--mode server` 不是当前启动方式。
 
 ## 2. 启动
 
@@ -42,7 +46,7 @@ Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文
 依赖已经安装时，在仓库根目录运行：
 
 ```powershell
-cd D:\code\agent\pi
+Set-Location C:\path\to\AutoPi
 .\pi-test.bat
 ```
 
@@ -59,7 +63,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\pi-test.ps1
 如果 `models.dev` 不可访问，使用已有模型数据进行离线构建：
 
 ```powershell
-cd D:\code\agent\pi
+Set-Location C:\path\to\AutoPi
 npm.cmd run build:offline
 node .\packages\coding-agent\dist\cli.js
 ```
@@ -259,9 +263,9 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 `outer_loop` 对模型的说明由三部分组成，不是单独一个 prompt 文件：
 
 1. [基础 system prompt](packages/coding-agent/src/core/system-prompt.ts)。
-2. [`outer_loop` 的 prompt snippet、guidelines 和意图级 JSON schema](packages/coding-agent/src/core/wakeup/outer-loop-tool.ts)。
-3. [每轮动态 clock](packages/coding-agent/src/core/wakeup/clock-extension.ts)。没有活动任务时不追加任何文本。
-4. [统一 wake custom message](packages/coding-agent/src/core/wakeup/prompt-composer.ts)。timer、monitor、用户取消和未来 agent 信件共用 JSON 编码格式。
+2. [`outer_loop` 的 prompt snippet、guidelines 和意图级 JSON schema](packages/coding-agent/src/core/outer-loop/tool.ts)。
+3. [每轮动态 clock](packages/coding-agent/src/core/outer-loop/clock-extension.ts)。没有活动任务时不追加任何文本。
+4. [统一 wake custom message](packages/coding-agent/src/core/wake/prompt.ts)。timer、monitor、用户取消和未来 agent 信件共用 JSON 编码格式。
 
 ## 7. 已知限制
 
@@ -270,7 +274,7 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 - `wait_process` 当前只支持 Windows。
 - 文件监测使用 polling，不是 `fs.watch`；进程监测也使用 polling，不是进程退出事件。
 - 同一时刻满足的多个 job 会分别恢复 agent，每个 job 对应一轮。
-- 真实 multi-agent、跨重启调度和 GUI 不在本阶段范围内。
+- 真实 multi-agent 和跨重启调度不在本阶段范围内；桌面界面由 `apps/desktop` 提供，并复用同一运行时。
 - 底部外循环状态只在统计值变化时重绘，避免周期性无效刷新干扰 TUI 滚动位置。
 
 ## 8. 当前验证情况
@@ -296,13 +300,15 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 
 其中生产路径回归明确覆盖 `WakeScheduler → WakeRunner → AgentWakeService → outer_loop_wake → before_agent_start → settled`，不再使用旧的 `self_wakeup` 直注入路径。
 
+正式分支使用 [GitHub Actions 的 build、check 和 test 门禁](https://github.com/shoelace66/AutoPi/actions/workflows/ci.yml)。Moonshot 兼容层目前以 sanitizer 单测、MCP 风格 fixture 和 OpenAI 请求快照为必需验证；没有可用 Key 时，不把真实 Kimi/Moonshot 网络调用作为 CI 前置条件。
+
 ## 9. 相关文档
 
 - [项目总览](README.md)
 - [上游关系与许可证说明](UPSTREAM.md)
 - [贡献指南](CONTRIBUTING.md)
 
-历史测试报告和早期 GUI/server 设计稿不属于当前核心公开接口；如需复核实现，应以源码和当前回归测试为准。
+历史测试报告和早期 server 设计稿不属于当前公开接口；如需复核实现，应以源码、正式桌面包和当前回归测试为准。
 
 ## 10. 开发原则
 

@@ -1,3 +1,4 @@
+import type { WakeJournal } from "../wake/journal.ts";
 import type {
 	ClaimedWake,
 	CreateWakeInput,
@@ -10,7 +11,6 @@ import type {
 	WakeStatus,
 	WakeStore,
 } from "./types.ts";
-import type { WakeJournal } from "./wake-journal.ts";
 import { normalizeCreateWakeInput } from "./wake-policy.ts";
 
 function clone<T>(value: T): T {
@@ -142,16 +142,16 @@ export class InMemoryWakeStore implements WakeStore {
 		};
 		this.jobs.set(job.id, job);
 		this.requestKeys.set(job.requestKey, job.id);
-		const source =
-			job.trigger.type === "time"
-				? { kind: "timer" as const, wakeId: job.id, scheduledAt: job.trigger.dueAt }
-				: { kind: "monitor" as const, wakeId: job.id, adapter: job.trigger.adapter };
 		this.lastJournalSeq =
 			(await this.journal?.append({
 				kind: "accepted",
-				wakeId: job.id,
+				resourceId: job.id,
 				requestId: job.requestKey,
-				source,
+				source: {
+					kind: "registration",
+					registrationId: job.id,
+					producer: { id: "outer_loop", name: "Outer Loop" },
+				} as never,
 				target: job.session as never,
 				data: job as never,
 			})) ?? this.lastJournalSeq;
@@ -207,7 +207,7 @@ export class InMemoryWakeStore implements WakeStore {
 		this.lastJournalSeq =
 			(await this.journal?.append({
 				kind: "cancelled",
-				wakeId: job.id,
+				resourceId: job.id,
 				data: { status: job.status, note } as never,
 				at: now,
 			})) ?? this.lastJournalSeq;
@@ -291,7 +291,12 @@ export class InMemoryWakeStore implements WakeStore {
 			satisfiedAt: result.satisfiedAt ?? now,
 		};
 		this.touch(job, now);
-		await this.journal?.append({ kind: "queued", wakeId: job.id, data: { cause: result.cause } as never, at: now });
+		await this.journal?.append({
+			kind: "queued",
+			resourceId: job.id,
+			data: { cause: result.cause } as never,
+			at: now,
+		});
 		return true;
 	}
 
@@ -330,7 +335,7 @@ export class InMemoryWakeStore implements WakeStore {
 		if (evaluation.matched) {
 			await this.journal?.append({
 				kind: "queued",
-				wakeId: job.id,
+				resourceId: job.id,
 				data: { cause: "monitor_match" } as never,
 				at: now,
 			});
@@ -362,7 +367,7 @@ export class InMemoryWakeStore implements WakeStore {
 		this.touch(job, now);
 		await this.journal?.append({
 			kind: failure.requiresUser ? "blocked" : job.status === "dead_letter" ? "rejected" : "retryable",
-			wakeId: job.id,
+			resourceId: job.id,
 			error: failure as never,
 			at: now,
 		});
@@ -406,7 +411,7 @@ export class InMemoryWakeStore implements WakeStore {
 		this.touch(job, now);
 		await this.journal?.append({
 			kind: "dispatching",
-			wakeId: job.id,
+			resourceId: job.id,
 			data: { runAttempt: job.runAttempt } as never,
 			at: now,
 		});
@@ -451,7 +456,7 @@ export class InMemoryWakeStore implements WakeStore {
 		this.touch(job, now);
 		await this.journal?.append({
 			kind: job.status === "cancelled" ? "cancelled" : "completed",
-			wakeId: job.id,
+			resourceId: job.id,
 			at: now,
 		});
 		return true;
@@ -474,7 +479,7 @@ export class InMemoryWakeStore implements WakeStore {
 		this.touch(job, now);
 		void this.journal?.append({
 			kind: status === "run_retry_wait" ? "retryable" : status === "blocked" ? "blocked" : "rejected",
-			wakeId: job.id,
+			resourceId: job.id,
 			error: failure as never,
 			at: now,
 		});

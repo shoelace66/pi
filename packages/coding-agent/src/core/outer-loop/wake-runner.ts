@@ -1,17 +1,15 @@
 import { access } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { SessionManager } from "../session-manager.ts";
-import type { AgentWakeService } from "./agent-wake.ts";
-import type { ClaimedWake, WakeFailure, WakeJob, WakeSource, WakeStore } from "./types.ts";
+import type { WakeRegistration } from "../wake/types.ts";
+import type { ClaimedWake, WakeFailure, WakeJob, WakeStore } from "./types.ts";
 
 export type WakeRunnerOptions = {
 	store: WakeStore;
 	workerId: string;
 	leaseMs?: number;
 	allowedSessionRoot?: string;
-	wakeService: AgentWakeService;
-	/** Serialize a wake turn with interactive work in the host application. */
-	runExclusive?: <T>(sessionFile: string, cwd: string, task: () => Promise<T>) => Promise<T>;
+	resolveRegistration: (job: WakeJob) => Promise<WakeRegistration>;
 	onRunStarted?: (job: WakeJob) => Promise<void> | void;
 	onRunFinished?: (job: WakeJob) => Promise<void> | void;
 };
@@ -63,8 +61,7 @@ export class WakeRunner {
 	private readonly workerId: string;
 	private readonly leaseMs: number;
 	private readonly allowedSessionRoot?: string;
-	private readonly wakeService: AgentWakeService;
-	private readonly runExclusive?: <T>(sessionFile: string, cwd: string, task: () => Promise<T>) => Promise<T>;
+	private readonly resolveRegistration: (job: WakeJob) => Promise<WakeRegistration>;
 	private readonly onRunStarted?: (job: WakeJob) => Promise<void> | void;
 	private readonly onRunFinished?: (job: WakeJob) => Promise<void> | void;
 
@@ -73,8 +70,7 @@ export class WakeRunner {
 		this.workerId = options.workerId;
 		this.leaseMs = options.leaseMs ?? 5 * 60_000;
 		this.allowedSessionRoot = options.allowedSessionRoot;
-		this.wakeService = options.wakeService;
-		this.runExclusive = options.runExclusive;
+		this.resolveRegistration = options.resolveRegistration;
 		this.onRunStarted = options.onRunStarted;
 		this.onRunFinished = options.onRunFinished;
 	}
@@ -86,41 +82,37 @@ export class WakeRunner {
 		await this.onRunStarted?.(job);
 		let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 		try {
-			const sessionFile = await validateSessionFile(claimed, this.allowedSessionRoot);
+			await validateSessionFile(claimed, this.allowedSessionRoot);
 			heartbeatTimer = setInterval(
 				() => {
 					void this.store.heartbeat(job.id, leaseToken, this.leaseMs).catch(() => undefined);
 				},
 				Math.max(1_000, Math.floor(this.leaseMs / 2)),
 			);
-			const runTurn = async (): Promise<boolean> => {
-				const source: WakeSource =
+			const registration = await this.resolveRegistration(job);
+			await registration.emit({
+				eventId: `${job.id}:${job.runAttempt}`,
+				message:
 					job.trigger.type === "time"
-						? { kind: "timer", wakeId: job.id, scheduledAt: job.trigger.dueAt }
-						: {
-								kind: "monitor",
-								wakeId: job.id,
-								adapter: job.trigger.adapter,
-								evidence: job.triggerRuntime?.evidence,
-								error: job.triggerRuntime?.monitorError,
-							};
-				const result = await this.wakeService.wake({
-					requestId: `${job.id}:${job.runAttempt}`,
-					target: { kind: "pi_session", session: job.session },
-					source,
-					job,
-					evidence: job.triggerRuntime?.evidence,
+						? `Outer-loop timer ${job.id} is due.`
+						: `Outer-loop monitor ${job.id} is ready (${job.triggerRuntime?.cause ?? "condition"}).`,
+				data: {
+					wakeId: job.id,
+					trigger: job.trigger,
+					cause: job.triggerRuntime?.cause ?? null,
+					evidence: job.triggerRuntime?.evidence ?? null,
+					monitorError: job.triggerRuntime?.monitorError ?? null,
+				},
+			});
+			const result = await registration.outcome;
+			if (result.status !== "completed") {
+				throw Object.assign(new Error(result.error?.message ?? `Wake ${result.status}`), {
+					code: result.error?.code ?? "AGENT_WAKE_FAILED",
+					retriable: result.status === "retryable",
+					requiresUser: result.status === "blocked",
 				});
-				if (result.status !== "completed") {
-					throw Object.assign(new Error(result.error?.message ?? `Wake ${result.status}`), {
-						code: result.error?.code ?? "AGENT_WAKE_FAILED",
-						retriable: result.status === "retryable",
-						requiresUser: result.status === "blocked",
-					});
-				}
-				return this.store.completeRun(job.id, leaseToken);
-			};
-			return await (this.runExclusive ? this.runExclusive(sessionFile, job.session.cwd, runTurn) : runTurn());
+			}
+			return this.store.completeRun(job.id, leaseToken);
 		} catch (error) {
 			const failure = classifyError(error);
 			const nextAttempt = new Date(

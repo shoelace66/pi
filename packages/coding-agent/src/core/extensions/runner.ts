@@ -12,6 +12,7 @@ import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
 import type { SessionManager } from "../session-manager.ts";
 import type { BuildSystemPromptOptions } from "../system-prompt.ts";
+import type { WakeContext } from "../wake/types.ts";
 import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
@@ -286,6 +287,7 @@ export class ExtensionRunner {
 	private compactFn: (options?: CompactOptions) => void = () => {};
 	private getSystemPromptFn: () => string = () => "";
 	private getSystemPromptOptionsFn: () => BuildSystemPromptOptions = () => ({ cwd: this.cwd });
+	private getWakeContextFn: () => WakeContext | undefined = () => undefined;
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	private forkHandler: ForkHandler = async () => ({ cancelled: false });
 	private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -349,6 +351,7 @@ export class ExtensionRunner {
 		this.compactFn = contextActions.compact;
 		this.getSystemPromptFn = contextActions.getSystemPrompt;
 		this.getSystemPromptOptionsFn = contextActions.getSystemPromptOptions ?? (() => ({ cwd: this.cwd }));
+		this.getWakeContextFn = contextActions.getWakeContext ?? (() => undefined);
 
 		// Flush provider registrations queued during extension loading
 		for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
@@ -694,6 +697,10 @@ export class ExtensionRunner {
 			get sessionManager() {
 				runner.assertActive();
 				return runner.sessionManager;
+			},
+			get wake() {
+				runner.assertActive();
+				return runner.getWakeContextFn();
 			},
 			get modelRegistry() {
 				runner.assertActive();

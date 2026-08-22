@@ -1,5 +1,6 @@
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+import type { JsonValue, WakeSessionReference } from "../wake/types.ts";
+
+export type { JsonPrimitive, JsonValue } from "../wake/types.ts";
 
 export type WakeStatus =
 	| "armed"
@@ -14,17 +15,6 @@ export type WakeStatus =
 	| "dead_letter";
 
 export type WakeCause = "time_due" | "monitor_match" | "monitor_timeout" | "monitor_error";
-
-export type WakeSource =
-	| { kind: "timer"; wakeId: string; scheduledAt: string }
-	| { kind: "monitor"; wakeId: string; adapter: string; evidence?: JsonValue; error?: WakeError }
-	| {
-			kind: "agent";
-			claimedFrom: { agentId: string; sessionId?: string; implementation?: string };
-			verification: "self_reported";
-			message: string;
-	  }
-	| { kind: "user_cancel"; wakeId: string; note?: string };
 
 /** The stable, intent-level monitor vocabulary exposed by outer_loop. */
 export type FileWakeEvent = "exists" | "missing" | "modified" | "content_changed";
@@ -105,12 +95,6 @@ export type WakeError = {
 	message: string;
 	retriable: boolean;
 	at: string;
-};
-
-export type WakeSessionReference = {
-	id: string;
-	file: string;
-	cwd: string;
 };
 
 export type WakeJob = WakeObjective & {

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">AutoPi AP wake orbit symbol</title>
+  <desc id="desc">A dark rounded-square app icon with a luminous wake orbit surrounding a custom AP monogram.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="118" y1="74" x2="876" y2="962" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#161B3C"/>
+      <stop offset="0.45" stop-color="#090D20"/>
+      <stop offset="1" stop-color="#050711"/>
+    </linearGradient>
+
+    <radialGradient id="cyanAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(210 270) rotate(43) scale(528 478)">
+      <stop stop-color="#20E8FF" stop-opacity="0.26"/>
+      <stop offset="0.52" stop-color="#20E8FF" stop-opacity="0.055"/>
+      <stop offset="1" stop-color="#20E8FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="violetAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(820 740) rotate(-142) scale(560 520)">
+      <stop stop-color="#8A5CFF" stop-opacity="0.3"/>
+      <stop offset="0.5" stop-color="#8A5CFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#8A5CFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="outerLoop" x1="178" y1="210" x2="852" y2="836" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D4FDFF"/>
+      <stop offset="0.18" stop-color="#32EAFF"/>
+      <stop offset="0.48" stop-color="#2EB7FF"/>
+      <stop offset="0.74" stop-color="#8267FF"/>
+      <stop offset="1" stop-color="#C2A6FF"/>
+    </linearGradient>
+
+    <linearGradient id="letterA" x1="335" y1="322" x2="572" y2="714" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.56" stop-color="#DDFBFF"/>
+      <stop offset="1" stop-color="#6FEAFF"/>
+    </linearGradient>
+
+    <linearGradient id="letterP" x1="596" y1="488" x2="760" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.42" stop-color="#E7DFFF"/>
+      <stop offset="1" stop-color="#A481FF"/>
+    </linearGradient>
+
+    <linearGradient id="rim" x1="150" y1="76" x2="836" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.3"/>
+      <stop offset="0.34" stop-color="#45E8FF" stop-opacity="0.13"/>
+      <stop offset="0.7" stop-color="#A077FF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <pattern id="microGrid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" stroke="#B9D7FF" stroke-opacity="0.055" stroke-width="1"/>
+      <circle cx="1" cy="1" r="1.25" fill="#DDF7FF" fill-opacity="0.09"/>
+    </pattern>
+
+    <clipPath id="iconClip">
+      <rect x="28" y="28" width="968" height="968" rx="226"/>
+    </clipPath>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#00030C" flood-opacity="0.72"/>
+    </filter>
+
+    <filter id="railGlow" x="-80%" y="-40%" width="260%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="13" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.8  0 0 0 0 1  0 0 0 0.6 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="monoGlow" x="-30%" y="-30%" width="160%" height="170%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#00030C" flood-opacity="0.72"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#7CEEFF" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <rect x="28" y="28" width="968" height="968" rx="226" fill="url(#bg)"/>
+  </g>
+
+  <g clip-path="url(#iconClip)">
+    <rect x="28" y="28" width="968" height="968" fill="url(#cyanAura)"/>
+    <rect x="28" y="28" width="968" height="968" fill="url(#violetAura)"/>
+    <rect x="28" y="28" width="968" height="968" fill="url(#microGrid)" opacity="0.7"/>
+
+    <path d="M-58 780C164 654 270 744 450 612C622 486 720 252 1086 236" stroke="#37E7FF" stroke-opacity="0.075" stroke-width="74" stroke-linecap="round"/>
+    <path d="M-82 868C176 720 346 812 548 654C736 508 810 328 1092 318" stroke="#9B76FF" stroke-opacity="0.055" stroke-width="28" stroke-linecap="round"/>
+
+    <ellipse cx="512" cy="858" rx="292" ry="48" fill="#02040D" fill-opacity="0.55"/>
+
+    <circle cx="512" cy="512" r="344" stroke="#CFE8FF" stroke-opacity="0.11" stroke-width="4"/>
+    <circle cx="512" cy="512" r="294" stroke="#D8ECFF" stroke-opacity="0.13" stroke-width="3" stroke-linecap="round" stroke-dasharray="7 19"/>
+    <g filter="url(#railGlow)">
+      <circle cx="512" cy="512" r="344" stroke="url(#outerLoop)" stroke-width="46" stroke-linecap="round" stroke-dasharray="1120 120 340 581" transform="rotate(-58 512 512)"/>
+    </g>
+
+    <g filter="url(#monoGlow)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M322 702L426 354C433 332 442 321 456 321C470 321 480 332 487 354L570 702" stroke="url(#letterA)" stroke-width="64"/>
+      <path d="M374 574H606" stroke="#64E9FF" stroke-width="52"/>
+      <path d="M606 512V906" stroke="url(#letterP)" stroke-width="62"/>
+      <path d="M607 526C644 489 750 488 750 590C750 683 653 707 608 654" stroke="url(#letterP)" stroke-width="62"/>
+    </g>
+
+    <circle cx="824" cy="390" r="13" fill="#FFFFFF"/>
+    <circle cx="824" cy="390" r="34" fill="#B492FF" fill-opacity="0.23"/>
+    <circle cx="824" cy="390" r="55" stroke="#B492FF" stroke-opacity="0.12" stroke-width="2"/>
+
+    <path d="M154 92C342 2 710 26 914 182" stroke="#FFFFFF" stroke-opacity="0.075" stroke-width="34" stroke-linecap="round"/>
+  </g>
+
+  <rect x="28.75" y="28.75" width="966.5" height="966.5" rx="225.25" stroke="url(#rim)" stroke-width="1.5"/>
+</svg>

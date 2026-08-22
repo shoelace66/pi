@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070914" />
+    <title>AutoPi · Wordmark Study</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f4f7ff;
+        --muted: #9aa5bd;
+        --line: rgba(255, 255, 255, 0.1);
+        --panel: rgba(14, 18, 37, 0.72);
+        --cyan: #31e8ff;
+        --violet: #8a67ff;
+        --page-x: clamp(20px, 5vw, 76px);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        background: #060812;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          radial-gradient(circle at 10% 10%, rgba(30, 206, 255, 0.1), transparent 30%),
+          radial-gradient(circle at 92% 54%, rgba(126, 87, 255, 0.13), transparent 34%),
+          linear-gradient(145deg, #090c19 0%, #050711 52%, #080918 100%);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: "";
+        opacity: 0.2;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+        background-size: 52px 52px;
+        mask-image: linear-gradient(to bottom, black, transparent 88%);
+      }
+
+      button,
+      a {
+        font: inherit;
+      }
+
+      button:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--cyan);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        padding: 28px var(--page-x) 52px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 48px;
+        gap: 24px;
+        margin-bottom: clamp(38px, 6vw, 86px);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+      }
+
+      .brand-mark {
+        position: relative;
+        width: 23px;
+        height: 23px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        border-radius: 7px;
+        background: linear-gradient(145deg, rgba(49, 232, 255, 0.2), rgba(138, 103, 255, 0.18));
+        box-shadow: inset 0 0 16px rgba(49, 232, 255, 0.12);
+      }
+
+      .brand-mark::before,
+      .brand-mark::after {
+        position: absolute;
+        content: "";
+      }
+
+      .brand-mark::before {
+        inset: 4px;
+        border: 2px solid var(--cyan);
+        border-left-color: #8f72ff;
+        border-radius: 50%;
+        transform: rotate(-28deg);
+      }
+
+      .brand-mark::after {
+        top: 3px;
+        right: 4px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 0 7px var(--cyan);
+      }
+
+      .edition {
+        color: #7f8aa3;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(420px, 1.12fr) minmax(310px, 0.88fr);
+        align-items: stretch;
+        gap: clamp(24px, 4vw, 64px);
+      }
+
+      .preview-card,
+      .info-card,
+      .detail-card,
+      .lockup-card,
+      .variant-card {
+        border: 1px solid var(--line);
+        border-radius: 32px;
+        background: var(--panel);
+        box-shadow: 0 32px 90px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(22px);
+      }
+
+      .preview-card {
+        position: relative;
+        min-height: 460px;
+        overflow: hidden;
+        padding: clamp(18px, 3vw, 34px);
+      }
+
+      .preview-card::before {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        background: linear-gradient(125deg, rgba(255, 255, 255, 0.06), transparent 25%, transparent 74%, rgba(118, 90, 255, 0.06));
+      }
+
+      .card-label {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        color: #a4adc2;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .stage {
+        --spot-x: 50%;
+        --spot-y: 48%;
+        position: absolute;
+        inset: 70px 24px 24px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 24px;
+        background:
+          radial-gradient(circle at var(--spot-x) var(--spot-y), rgba(68, 224, 255, 0.14), transparent 32%),
+          radial-gradient(circle at 74% 70%, rgba(139, 96, 255, 0.16), transparent 34%),
+          #080b18;
+        transition: background 260ms ease;
+      }
+
+      .stage::before,
+      .stage::after {
+        position: absolute;
+        width: min(96%, 760px);
+        aspect-ratio: 4;
+        pointer-events: none;
+        content: "";
+        border-radius: 50%;
+      }
+
+      .stage::before {
+        border: 1px solid rgba(101, 226, 255, 0.12);
+        box-shadow:
+          0 0 0 40px rgba(117, 99, 255, 0.025),
+          0 0 0 80px rgba(52, 224, 255, 0.02);
+      }
+
+      .stage::after {
+        width: min(78%, 600px);
+        border: 1px dashed rgba(164, 136, 255, 0.12);
+      }
+
+      .stage[data-scene="light"] {
+        background:
+          radial-gradient(circle at 30% 20%, rgba(66, 220, 255, 0.16), transparent 32%),
+          linear-gradient(145deg, #f6f8ff, #dde4f1);
+      }
+
+      .stage[data-scene="light"]::before,
+      .stage[data-scene="light"]::after {
+        border-color: rgba(33, 46, 81, 0.1);
+      }
+
+      .stage[data-scene="mono"] {
+        background: #0b0d12;
+      }
+
+      .stage[data-scene="mono"] .main-wordmark {
+        filter: grayscale(1) contrast(1.08);
+      }
+
+      .main-wordmark {
+        position: relative;
+        z-index: 1;
+        display: block;
+        width: min(86%, 720px);
+        height: auto;
+        filter: drop-shadow(0 24px 38px rgba(0, 0, 0, 0.4));
+      }
+
+      .wm-use-light {
+        display: none;
+      }
+
+      .stage[data-scene="light"] .wm-use-color {
+        display: none;
+      }
+
+      .stage[data-scene="light"] .wm-use-light {
+        display: block;
+      }
+
+      .wm-dot-halo {
+        animation: wake-pulse 4.2s ease-in-out infinite;
+      }
+
+      .info-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 460px;
+        padding: clamp(30px, 4vw, 56px);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        margin: 0 0 30px;
+        color: #8e9ab6;
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 22px;
+        height: 1px;
+        content: "";
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+      }
+
+      h1 {
+        max-width: 11ch;
+        margin: 0;
+        font-size: clamp(40px, 5vw, 68px);
+        font-weight: 580;
+        line-height: 1.02;
+        letter-spacing: -0.045em;
+      }
+
+      .gradient-word {
+        color: transparent;
+        background: linear-gradient(105deg, #d9fbff 15%, #55e9ff 46%, #a080ff 86%);
+        background-clip: text;
+        -webkit-background-clip: text;
+      }
+
+      .lead {
+        max-width: 35em;
+        margin: 28px 0 0;
+        color: var(--muted);
+        font-size: clamp(14px, 1.3vw, 17px);
+        line-height: 1.8;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 24px;
+      }
+
+      .tag {
+        padding: 8px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 999px;
+        color: #aeb8cf;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+      }
+
+      .controls {
+        margin-top: 44px;
+      }
+
+      .control-label {
+        display: block;
+        margin-bottom: 12px;
+        color: #737f9a;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+        padding: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 14px;
+        background: rgba(3, 5, 13, 0.5);
+      }
+
+      .scene-button {
+        min-height: 42px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 10px;
+        color: #8792aa;
+        background: transparent;
+        cursor: pointer;
+        transition: color 180ms ease, background 180ms ease;
+      }
+
+      .scene-button:hover {
+        color: #dce5f7;
+      }
+
+      .scene-button[aria-pressed="true"] {
+        color: #f7fbff;
+        background: rgba(255, 255, 255, 0.09);
+        box-shadow: 0 5px 18px rgba(0, 0, 0, 0.22);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 13px;
+        color: #cbd5e8;
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+        transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+      }
+
+      .action:hover {
+        transform: translateY(-2px);
+        border-color: rgba(83, 227, 255, 0.35);
+        background: rgba(57, 213, 255, 0.08);
+      }
+
+      .action.primary {
+        border-color: transparent;
+        color: #051017;
+        font-weight: 700;
+        background: linear-gradient(100deg, #7af2ff, #9e89ff);
+      }
+
+      .lockup-card {
+        display: flex;
+        align-items: center;
+        gap: clamp(20px, 4vw, 44px);
+        margin-top: 20px;
+        padding: clamp(24px, 3.4vw, 44px) clamp(24px, 4vw, 56px);
+      }
+
+      .lockup-card img {
+        display: block;
+        width: clamp(72px, 9vw, 112px);
+        height: auto;
+        border-radius: 24%;
+        filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.4));
+      }
+
+      .lockup-divider {
+        width: 1px;
+        align-self: stretch;
+        background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.16), transparent);
+      }
+
+      .lockup-wordmark {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .lockup-wordmark svg {
+        display: block;
+        width: 100%;
+        max-width: 520px;
+        height: auto;
+      }
+
+      .variants {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .variant-card {
+        overflow: hidden;
+        padding: 20px;
+      }
+
+      .variant-title {
+        margin: 0 0 16px;
+        color: #a4adc2;
+        font-size: 11px;
+        font-weight: 620;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .variant-sample {
+        display: grid;
+        place-items: center;
+        min-height: 130px;
+        padding: 22px 18px;
+        border-radius: 18px;
+      }
+
+      .variant-sample svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .variant-dark {
+        background:
+          radial-gradient(circle at 24% 18%, rgba(68, 224, 255, 0.12), transparent 40%),
+          radial-gradient(circle at 82% 78%, rgba(139, 96, 255, 0.14), transparent 44%),
+          #090d20;
+      }
+
+      .variant-light {
+        background: linear-gradient(145deg, #f6f8ff, #dde4f1);
+      }
+
+      .variant-mono {
+        background: #0b0d12;
+      }
+
+      .variant-mono svg {
+        filter: grayscale(1) contrast(1.08);
+      }
+
+      .details {
+        display: grid;
+        grid-template-columns: 1.18fr 0.82fr;
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .detail-card {
+        padding: clamp(24px, 3vw, 36px);
+      }
+
+      .detail-title {
+        margin: 0 0 25px;
+        font-size: 14px;
+        font-weight: 620;
+        letter-spacing: 0.02em;
+      }
+
+      .sizes {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 26px;
+      }
+
+      .size-sample {
+        display: grid;
+        justify-items: start;
+        gap: 10px;
+        width: 100%;
+        color: #6f7b94;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+
+      .size-sample svg {
+        display: block;
+        width: 100%;
+        max-width: var(--w);
+        height: auto;
+      }
+
+      .palette {
+        display: grid;
+        gap: 12px;
+      }
+
+      .swatch {
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        align-items: center;
+        gap: 12px;
+        min-height: 46px;
+        color: #acb6cb;
+        font-size: 12px;
+      }
+
+      .swatch-dot {
+        width: 42px;
+        height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 13px;
+        background: var(--swatch);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      }
+
+      .swatch code {
+        color: #66728c;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 10px;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 38px;
+        color: #59647d;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+      }
+
+      @keyframes wake-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.55; }
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .details,
+        .variants {
+          grid-template-columns: 1fr;
+        }
+
+        .preview-card {
+          min-height: min(520px, 70vw);
+        }
+
+        .info-card {
+          min-height: auto;
+        }
+
+        h1 {
+          max-width: none;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          padding-top: 18px;
+        }
+
+        .edition {
+          display: none;
+        }
+
+        .preview-card {
+          min-height: 300px;
+          border-radius: 24px;
+        }
+
+        .stage {
+          inset: 60px 12px 12px;
+        }
+
+        .info-card,
+        .detail-card {
+          padding: 26px 22px;
+          border-radius: 24px;
+        }
+
+        .lockup-card {
+          flex-wrap: wrap;
+          border-radius: 24px;
+        }
+
+        .lockup-divider {
+          display: none;
+        }
+
+        .lockup-wordmark {
+          flex-basis: 100%;
+        }
+
+        .variant-card {
+          border-radius: 24px;
+        }
+
+        .swatch {
+          grid-template-columns: 38px 1fr auto;
+        }
+
+        .swatch-dot {
+          width: 38px;
+          height: 38px;
+        }
+
+        .footer {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span>AutoPi</div>
+        <div class="edition">Wordmark study 02 · Vector / 1710 × 430</div>
+      </header>
+
+      <section class="hero" aria-labelledby="page-title">
+        <article class="preview-card">
+          <div class="card-label"><span>Master wordmark</span><span>01 / Wake geometry</span></div>
+          <div class="stage" id="wordmark-stage" data-scene="dark">
+            <svg class="main-wordmark" id="wm-svg" xmlns="http://www.w3.org/2000/svg" width="1710" height="430" viewBox="-36 60 1710 430" fill="none" role="img" aria-labelledby="wm-title wm-desc">
+              <title id="wm-title">AutoPi 品牌字标</title>
+              <desc id="wm-desc">横向几何字标 AutoPi：A 大写带青色能量横杠，o 是断口环轨，P 大写带越过基线的长尾，i 的圆点是发光 Wake 节点。</desc>
+              <defs id="wmDefs">
+                <linearGradient id="gMain" x1="20" y1="90" x2="1610" y2="460" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" style="stop-color: var(--wm-s1, #FCFEFF)" />
+                  <stop offset="0.48" style="stop-color: var(--wm-s2, #CFF3FF)" />
+                  <stop offset="1" style="stop-color: var(--wm-s3, #AC9DFF)" />
+                </linearGradient>
+                <linearGradient id="gLoop" x1="1006" y1="190" x2="1196" y2="380" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" style="stop-color: var(--wm-l1, #8EF4FF)" />
+                  <stop offset="0.45" style="stop-color: var(--wm-l2, #32EAFF)" />
+                  <stop offset="1" style="stop-color: var(--wm-l3, #8A67FF)" />
+                </linearGradient>
+                <linearGradient id="gMainLight" x1="20" y1="90" x2="1610" y2="460" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#161B3C" />
+                  <stop offset="0.48" stop-color="#3E56D0" />
+                  <stop offset="1" stop-color="#8A67FF" />
+                </linearGradient>
+                <linearGradient id="gLoopLight" x1="1006" y1="190" x2="1196" y2="380" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#22BCE0" />
+                  <stop offset="0.45" stop-color="#1AA4EA" />
+                  <stop offset="1" stop-color="#6A4FE0" />
+                </linearGradient>
+                <filter id="wmGlow" x="-3%" y="-14%" width="106%" height="142%" color-interpolation-filters="sRGB">
+                  <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#00030C" flood-opacity="0.5" />
+                  <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#53E3FF" flood-opacity="0.15" />
+                </filter>
+                <filter id="wmGlowLight" x="-3%" y="-14%" width="106%" height="142%" color-interpolation-filters="sRGB">
+                  <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1A2150" flood-opacity="0.25" />
+                  <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#2FB9E8" flood-opacity="0.12" />
+                </filter>
+              <g id="wmArt" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1 0 -0.0875 1 33.3 0)">
+                <g filter="url(#wmGlow)">
+                  <path d="M40 380L186 122C191 96 209 96 214 122L360 380" stroke="url(#gMain)" stroke-width="40" />
+                  <path d="M88 300H330" style="stroke: var(--wm-cross, #64E9FF)" stroke-width="36" />
+                  <path d="M340 300H420" style="stroke: var(--wm-cross, #64E9FF)" stroke-opacity="0.3" stroke-width="12" />
+                  <path d="M430 300H446" style="stroke: var(--wm-cross, #64E9FF)" stroke-opacity="0.16" stroke-width="7" />
+                  <path d="M470 190V306A110 82 0 0 0 690 306V190" stroke="url(#gMain)" stroke-width="40" />
+                  <path d="M858 134V342Q858 384 900 384" stroke="url(#gMain)" stroke-width="40" />
+                  <path d="M802 214H914" stroke="url(#gMain)" stroke-width="40" />
+                  <circle cx="1101" cy="285" r="75" pathLength="100" stroke="url(#gLoop)" stroke-width="40" stroke-dasharray="84 16" transform="rotate(-11 1101 285)" />
+                  <path d="M1288 100V440" stroke="url(#gMain)" stroke-width="40" />
+                  <path d="M1288 106C1354 92 1446 100 1446 178C1446 248 1370 266 1288 244" stroke="url(#gMain)" stroke-width="40" />
+                  <path d="M1558 190V380" stroke="url(#gMain)" stroke-width="40" />
+                </g>
+                <g>
+                  <circle cx="1158" cy="237" r="22" style="fill: var(--wm-halo, #B492FF)" fill-opacity="0.2" stroke="none" />
+                  <circle cx="1158" cy="237" r="11" style="fill: var(--wm-dot, #F4FBFF)" stroke="none" />
+                </g>
+                <g>
+                  <circle cx="1558" cy="124" r="34" style="stroke: var(--wm-halo, #B492FF)" stroke-opacity="0.13" stroke-width="2.5" />
+                  <g class="wm-dot-halo">
+                    <circle cx="1558" cy="124" r="26" style="fill: var(--wm-halo, #B492FF)" fill-opacity="0.22" stroke="none" />
+                  </g>
+                  <circle cx="1558" cy="124" r="12" style="fill: var(--wm-dot, #F4FBFF)" stroke="none" />
+                </g>
+              </g>
+              <g id="wmArtLight" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1 0 -0.0875 1 33.3 0)">
+                <g filter="url(#wmGlowLight)">
+                  <path d="M40 380L186 122C191 96 209 96 214 122L360 380" stroke="url(#gMainLight)" stroke-width="40" />
+                  <path d="M88 300H330" stroke="#0CA6CC" stroke-width="36" />
+                  <path d="M340 300H420" stroke="#0CA6CC" stroke-opacity="0.3" stroke-width="12" />
+                  <path d="M430 300H446" stroke="#0CA6CC" stroke-opacity="0.16" stroke-width="7" />
+                  <path d="M470 190V306A110 82 0 0 0 690 306V190" stroke="url(#gMainLight)" stroke-width="40" />
+                  <path d="M858 134V342Q858 384 900 384" stroke="url(#gMainLight)" stroke-width="40" />
+                  <path d="M802 214H914" stroke="url(#gMainLight)" stroke-width="40" />
+                  <circle cx="1101" cy="285" r="75" pathLength="100" stroke="url(#gLoopLight)" stroke-width="40" stroke-dasharray="84 16" transform="rotate(-11 1101 285)" />
+                  <path d="M1288 100V440" stroke="url(#gMainLight)" stroke-width="40" />
+                  <path d="M1288 106C1354 92 1446 100 1446 178C1446 248 1370 266 1288 244" stroke="url(#gMainLight)" stroke-width="40" />
+                  <path d="M1558 190V380" stroke="url(#gMainLight)" stroke-width="40" />
+                </g>
+                <g>
+                  <circle cx="1158" cy="237" r="22" fill="#8A67FF" fill-opacity="0.2" stroke="none" />
+                  <circle cx="1158" cy="237" r="11" fill="#6E54E8" stroke="none" />
+                </g>
+                <g>
+                  <circle cx="1558" cy="124" r="34" stroke="#8A67FF" stroke-opacity="0.16" stroke-width="2.5" />
+                  <g class="wm-dot-halo">
+                    <circle cx="1558" cy="124" r="26" fill="#8A67FF" fill-opacity="0.25" stroke="none" />
+                  </g>
+                  <circle cx="1558" cy="124" r="12" fill="#6E54E8" stroke="none" />
+                </g>
+              </g>
+              </defs>
+              <use class="wm-use-color" href="#wmArt" />
+              <use class="wm-use-light" href="#wmArtLight" />
+            </svg>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <div>
+            <p class="eyebrow">AutoPi wordmark</p>
+            <h1 id="page-title">几何<br /><span class="gradient-word">字标</span></h1>
+            <p class="lead">AutoPi 是原生 Pi 核心之外的 Wake Runtime：字标中 <strong>o</strong> 是一枚带 Wake 珠点的断口环轨，对应 Outer Loop 的后台并行等待与一次触发；<strong>P</strong> 的竖笔越过基线向下延伸，呼应图标中穿出外环的长尾；<strong>i</strong> 的圆点是 Wake 节点，代表 timer、file 或 process 条件满足后回到同一会话的一次唤醒。</p>
+            <div class="tags" aria-label="设计关键词"><span class="tag">OUTER LOOP · o</span><span class="tag">LONG TAIL · P</span><span class="tag">WAKE NODE · i</span></div>
+          </div>
+
+          <div class="controls">
+            <span class="control-label">预览场景</span>
+            <div class="segmented" role="group" aria-label="切换字标预览背景">
+              <button class="scene-button" type="button" data-scene="dark" aria-pressed="true">深色</button>
+              <button class="scene-button" type="button" data-scene="light" aria-pressed="false">亮色</button>
+              <button class="scene-button" type="button" data-scene="mono" aria-pressed="false">单色</button>
+            </div>
+            <div class="actions">
+              <button class="action primary" id="download-png" type="button">导出透明 PNG</button>
+              <button class="action" id="download-svg" type="button">下载 SVG</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section aria-label="图标与字标组合">
+        <article class="lockup-card">
+          <img src="./autopi-symbol.svg" width="112" height="112" alt="AutoPi App 图标" />
+          <span class="lockup-divider" aria-hidden="true"></span>
+          <div class="lockup-wordmark">
+            <svg viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标"><use href="#wmArt"></use></svg>
+          </div>
+        </article>
+      </section>
+
+      <section class="variants" aria-label="字标场景变体">
+        <article class="variant-card">
+          <h2 class="variant-title">深色背景 · #090D20</h2>
+          <div class="variant-sample variant-dark">
+            <svg viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标深色版本"><use href="#wmArt"></use></svg>
+          </div>
+        </article>
+        <article class="variant-card">
+          <h2 class="variant-title">亮色背景 · 反色适配</h2>
+          <div class="variant-sample variant-light">
+            <svg viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标亮色版本"><use href="#wmArtLight"></use></svg>
+          </div>
+        </article>
+        <article class="variant-card">
+          <h2 class="variant-title">单色 · 冰白</h2>
+          <div class="variant-sample variant-mono">
+            <svg viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标单色版本"><use href="#wmArt"></use></svg>
+          </div>
+        </article>
+      </section>
+
+      <section class="details" aria-label="字标规格">
+        <article class="detail-card">
+          <h2 class="detail-title">尺寸辨识度</h2>
+          <div class="sizes">
+            <div class="size-sample"><svg style="--w: 955px" width="955" height="240" viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标 240 像素高度预览"><use href="#wmArt"></use></svg><span>240 PX</span></div>
+            <div class="size-sample"><svg style="--w: 477px" width="477" height="120" viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标 120 像素高度预览"><use href="#wmArt"></use></svg><span>120 PX</span></div>
+            <div class="size-sample"><svg style="--w: 255px" width="255" height="64" viewBox="-36 60 1710 430" fill="none" role="img" aria-label="AutoPi 字标 64 像素高度预览"><use href="#wmArt"></use></svg><span>64 PX</span></div>
+          </div>
+        </article>
+
+        <article class="detail-card">
+          <h2 class="detail-title">核心色谱</h2>
+          <div class="palette">
+            <div class="swatch"><span class="swatch-dot" style="--swatch: #090d20"></span><span>深空底色</span><code>#090D20</code></div>
+            <div class="swatch"><span class="swatch-dot" style="--swatch: #31e8ff"></span><span>电光青</span><code>#31E8FF</code></div>
+            <div class="swatch"><span class="swatch-dot" style="--swatch: #8a67ff"></span><span>核心紫</span><code>#8A67FF</code></div>
+            <div class="swatch"><span class="swatch-dot" style="--swatch: #f4fbff"></span><span>冰白高光</span><code>#F4FBFF</code></div>
+          </div>
+        </article>
+      </section>
+
+      <footer class="footer"><span>AUTO PI · WAKE GEOMETRY</span><span>1710 × 430 / SVG MASTER / TRANSPARENT</span></footer>
+    </main>
+
+    <script>
+      const stage = document.querySelector('#wordmark-stage');
+      const sceneButtons = document.querySelectorAll('.scene-button');
+      const wordmark = document.querySelector('#wm-svg');
+
+      sceneButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          stage.dataset.scene = button.dataset.scene;
+          sceneButtons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        });
+      });
+
+      stage.addEventListener('pointermove', (event) => {
+        const rect = stage.getBoundingClientRect();
+        stage.style.setProperty('--spot-x', `${((event.clientX - rect.left) / rect.width) * 100}%`);
+        stage.style.setProperty('--spot-y', `${((event.clientY - rect.top) / rect.height) * 100}%`);
+      });
+
+      function serializeWordmark() {
+        const NS = 'http://www.w3.org/2000/svg';
+        const out = document.createElementNS(NS, 'svg');
+        out.setAttribute('xmlns', NS);
+        out.setAttribute('width', '1710');
+        out.setAttribute('height', '430');
+        out.setAttribute('viewBox', '-36 60 1710 430');
+        out.setAttribute('fill', 'none');
+        const defs = wordmark.querySelector('#wmDefs').cloneNode(true);
+        defs.querySelector('#wmArt').remove();
+        defs.querySelector('#wmArtLight').remove();
+        out.appendChild(defs);
+        out.appendChild(wordmark.querySelector('#wmArt').cloneNode(true));
+        return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(out)}`;
+      }
+
+      function downloadBlob(blob, filename) {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      document.querySelector('#download-svg').addEventListener('click', () => {
+        downloadBlob(new Blob([serializeWordmark()], { type: 'image/svg+xml;charset=utf-8' }), 'autopi-wordmark.svg');
+      });
+
+      document.querySelector('#download-png').addEventListener('click', () => {
+        const source = new Blob([serializeWordmark()], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(source);
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 2565;
+          canvas.height = 645;
+          canvas.getContext('2d').drawImage(image, 0, 0, 2565, 645);
+          canvas.toBlob((blob) => {
+            if (blob) downloadBlob(blob, 'autopi-wordmark-2565.png');
+            URL.revokeObjectURL(url);
+          }, 'image/png');
+        };
+        image.src = url;
+      });
+    </script>
+  </body>
+</html>

@@ -4,6 +4,18 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
+
+# Local design/test evidence (not part of source releases)
+Resources/
+*-test-report-20*.md
+*-live-test-report-20*.md
+*-live-test-20*.md
+.pi/extensions/ui-demo.ts
+docs/desktop-next-development-report.md
+docs/gui-technical-design.md
+docs/outer-loop-change-audit.md
+docs/self-wakeup.md
+apps/desktop/GUI_PARITY_CHECKLIST.md
 # packages/*/node_modules/
 packages/*/dist/
 packages/*/dist-chrome/
@@ -11,6 +23,13 @@ packages/*/dist-firefox/
 packages/ai/src/providers/data/
 packages/ai/src/providers/.model-generation-*/
 *.cpuprofile
+
+# Desktop product artifacts
+PiDesktop-win-*.zip
+AutoPi-*.zip
+release-build*/
+release-delivery*/
+release-package*/
 
 # Environment
 .env

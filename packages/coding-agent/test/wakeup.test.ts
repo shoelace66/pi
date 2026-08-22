@@ -2,16 +2,17 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createFileStateAdapter } from "../src/core/wakeup/adapters/file-state.ts";
-import { createProcessStateAdapter } from "../src/core/wakeup/adapters/process-state.ts";
-import { evaluateMonitorCondition } from "../src/core/wakeup/condition-evaluator.ts";
-import { InMemoryWakeStore } from "../src/core/wakeup/in-memory-wake-store.ts";
-import { MonitorRegistry } from "../src/core/wakeup/monitor-registry.ts";
-import { OuterLoopRuntime } from "../src/core/wakeup/outer-loop-runtime.ts";
-import { createOuterLoopTool } from "../src/core/wakeup/outer-loop-tool.ts";
-import type { WakeJob } from "../src/core/wakeup/types.ts";
-import { normalizeCreateWakeInput, WakePolicyError } from "../src/core/wakeup/wake-policy.ts";
-import { WakeScheduler } from "../src/core/wakeup/wake-scheduler.ts";
+import { createFileStateAdapter } from "../src/core/outer-loop/adapters/file-state.ts";
+import { createProcessStateAdapter } from "../src/core/outer-loop/adapters/process-state.ts";
+import { evaluateMonitorCondition } from "../src/core/outer-loop/condition-evaluator.ts";
+import { InMemoryWakeStore } from "../src/core/outer-loop/in-memory-wake-store.ts";
+import { MonitorRegistry } from "../src/core/outer-loop/monitor-registry.ts";
+import { OuterLoopRuntime } from "../src/core/outer-loop/runtime.ts";
+import { createOuterLoopTool } from "../src/core/outer-loop/tool.ts";
+import type { WakeJob } from "../src/core/outer-loop/types.ts";
+import { normalizeCreateWakeInput, WakePolicyError } from "../src/core/outer-loop/wake-policy.ts";
+import { WakeScheduler } from "../src/core/outer-loop/wake-scheduler.ts";
+import { WakeRuntime } from "../src/core/wake/runtime.ts";
 
 const tempDirs: string[] = [];
 
@@ -48,7 +49,7 @@ describe("outer-loop core", () => {
 	it("does not publish a status change for an unchanged monitor poll", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "pi-outer-loop-render-test-"));
 		tempDirs.push(dir);
-		const runtime = new OuterLoopRuntime({ cwd: dir });
+		const runtime = new OuterLoopRuntime({ cwd: dir, wakeRuntime: new WakeRuntime({ agentDir: dir }) });
 		let changedEvents = 0;
 		runtime.subscribe((event) => {
 			if (event.type === "changed") changedEvents++;
@@ -68,6 +69,7 @@ describe("outer-loop core", () => {
 		await runtime.scheduler.tick(firstPoll);
 		await runtime.scheduler.tick(new Date(firstPoll.getTime() + 30_000));
 		expect(changedEvents).toBe(1);
+		await runtime.stop();
 	});
 
 	it("exposes only intent actions and rejects non-persisted sessions or project escapes", async () => {

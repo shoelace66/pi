@@ -29,9 +29,7 @@ import {
 	type ToolName,
 	withFileMutationQueue,
 } from "./tools/index.ts";
-import { MonitorRegistry } from "./wakeup/monitor-registry.ts";
-import { createOuterLoopTool } from "./wakeup/outer-loop-tool.ts";
-import type { WakeStore } from "./wakeup/types.ts";
+import type { WakeRuntime } from "./wake/runtime.ts";
 
 // Preserve the pre-0.81 fallback for extensions that construct Agent instances
 // or invoke low-level agent loops without supplying streamFn. Agent core remains
@@ -74,11 +72,8 @@ export interface CreateAgentSessionOptions {
 	excludeTools?: string[];
 	/** Custom tools to register (in addition to built-in tools). */
 	customTools?: ToolDefinition[];
-	/** Optional outer-loop self-wakeup tools. The scheduler remains caller-owned. */
-	wakeup?: {
-		store: WakeStore;
-		monitorRegistry?: MonitorRegistry;
-	};
+	/** Optional process-local Wake runtime. Interactive CLI configures this automatically; SDK callers opt in. */
+	wakeRuntime?: WakeRuntime;
 
 	/** Resource loader. When omitted, DefaultResourceLoader is used. */
 	resourceLoader?: ResourceLoader;
@@ -115,16 +110,7 @@ export type {
 	SlashCommandSource,
 	ToolDefinition,
 } from "./extensions/index.ts";
-export type { PromptTemplate } from "./prompt-templates.ts";
-export type { Skill } from "./skills.ts";
-export type { Tool } from "./tools/index.ts";
 export type {
-	AgentTargetRef,
-	AgentTargetResolver,
-	AgentWakeRequest,
-	AgentWakeResult,
-	AgentWakeServiceOptions,
-	AgentWakeStatus,
 	ClaimedWake,
 	CreateWakeInput,
 	CreateWakeResult,
@@ -132,8 +118,6 @@ export type {
 	FileWakeEvent,
 	InMemoryWakeStats,
 	InMemoryWakeStoreOptions,
-	JsonPrimitive,
-	JsonValue,
 	MonitorAdapter,
 	MonitorCondition,
 	MonitorDelivery,
@@ -148,41 +132,29 @@ export type {
 	ProcessState,
 	ProcessStateAdapterOptions,
 	ProcessStateQuery,
-	ResolvedAgentTarget,
 	TimeWakeTrigger,
 	TriggerResult,
 	WakeCause,
 	WakeError,
 	WakeFailure,
 	WakeJob,
-	WakeJournal,
-	WakeJournalEnvelope,
-	WakeJournalEvent,
-	WakeJournalKind,
 	WakeLease,
 	WakeObjective,
-	WakeRecoveryNotice,
 	WakeRunnerOptions,
 	WakeSchedulerOptions,
-	WakeSessionReference,
-	WakeSource,
 	WakeStatus,
 	WakeStore,
 	WakeTrigger,
 	WakeTriggerRuntime,
-} from "./wakeup/index.ts";
+} from "./outer-loop/index.ts";
 export {
-	AgentWakeService,
 	createFileStateAdapter,
 	createOuterLoopClockExtension,
 	createOuterLoopTool,
 	createProcessStateAdapter,
 	DEFAULT_WAKE_POLICY,
 	FileStateAdapter,
-	findUnclosedWakeEvents,
-	InMemoryWakeJournal,
 	InMemoryWakeStore,
-	JsonlWakeJournal,
 	MonitorRegistry,
 	normalizeCreateWakeInput,
 	OuterLoopRuntime,
@@ -191,7 +163,41 @@ export {
 	WakePolicyError,
 	WakeRunner,
 	WakeScheduler,
-} from "./wakeup/index.ts";
+} from "./outer-loop/index.ts";
+export type { PromptTemplate } from "./prompt-templates.ts";
+export type { Skill } from "./skills.ts";
+export type { Tool } from "./tools/index.ts";
+export type {
+	JsonPrimitive,
+	JsonValue,
+	WakeCapabilityAddress,
+	WakeContext,
+	WakeEnvelope,
+	WakeEvent,
+	WakeInbox,
+	WakeJournal,
+	WakeJournalEnvelope,
+	WakeJournalEvent,
+	WakeJournalKind,
+	WakeOutcome,
+	WakeOutcomeStatus,
+	WakeProducer,
+	WakeReceipt,
+	WakeRecoveryNotice,
+	WakeRegistration,
+	WakeRegistrationInfo,
+	WakeRegistrationInput,
+	WakeSessionReference,
+	WakeSource,
+} from "./wake/index.ts";
+export {
+	findUnclosedWakeEvents,
+	InMemoryWakeJournal,
+	JsonlWakeJournal,
+	WakeClient,
+	WakeClientError,
+	WakeRuntime,
+} from "./wake/index.ts";
 
 export {
 	withFileMutationQueue,
@@ -259,6 +265,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
+	const sessionFile = sessionManager.getSessionFile();
+	const wakeContext =
+		options.wakeRuntime && sessionFile
+			? options.wakeRuntime.contextFor({
+					id: sessionManager.getSessionId(),
+					file: sessionFile,
+					cwd: sessionManager.getCwd(),
+				})
+			: undefined;
 
 	if (!resourceLoader) {
 		resourceLoader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
@@ -455,18 +470,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		sessionManager.appendThinkingLevelChange(thinkingLevel);
 	}
 
-	const customTools = [
-		...(options.customTools ?? []),
-		...(options.wakeup
-			? [
-					createOuterLoopTool({
-						store: options.wakeup.store,
-						monitorRegistry: options.wakeup.monitorRegistry ?? new MonitorRegistry(),
-						allowedRoot: cwd,
-					}),
-				]
-			: []),
-	];
+	const customTools = options.customTools ?? [];
 
 	const session = new AgentSession({
 		agent,
@@ -482,7 +486,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		excludedToolNames,
 		extensionRunnerRef,
 		sessionStartEvent: options.sessionStartEvent,
+		wakeContext,
 	});
+	if (options.wakeRuntime) await options.wakeRuntime.bindSession(session);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

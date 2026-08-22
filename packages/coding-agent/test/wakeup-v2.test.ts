@@ -2,12 +2,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createOuterLoopClockExtension, formatOuterLoopClock } from "../src/core/wakeup/clock-extension.ts";
-import { InMemoryWakeStore } from "../src/core/wakeup/in-memory-wake-store.ts";
-import { MonitorRegistry } from "../src/core/wakeup/monitor-registry.ts";
-import { createOuterLoopTool } from "../src/core/wakeup/outer-loop-tool.ts";
-import type { WakeJob } from "../src/core/wakeup/types.ts";
-import { findUnclosedWakeEvents, InMemoryWakeJournal, JsonlWakeJournal } from "../src/core/wakeup/wake-journal.ts";
+import { createOuterLoopClockExtension, formatOuterLoopClock } from "../src/core/outer-loop/clock-extension.ts";
+import { InMemoryWakeStore } from "../src/core/outer-loop/in-memory-wake-store.ts";
+import { MonitorRegistry } from "../src/core/outer-loop/monitor-registry.ts";
+import { createOuterLoopTool } from "../src/core/outer-loop/tool.ts";
+import type { WakeJob } from "../src/core/outer-loop/types.ts";
+import { findUnclosedWakeEvents, InMemoryWakeJournal, JsonlWakeJournal } from "../src/core/wake/journal.ts";
 
 const tempDirs: string[] = [];
 
@@ -102,14 +102,14 @@ describe("outer-loop v2 intent contract", () => {
 		const journal = new InMemoryWakeJournal();
 		await journal.append({
 			kind: "accepted",
-			wakeId: "wake_open",
+			resourceId: "wake_open",
 			target: { id: "session" },
 		});
-		await journal.append({ kind: "dispatching", wakeId: "wake_open" });
-		await journal.append({ kind: "accepted", wakeId: "wake_done", target: { id: "session" } });
-		await journal.append({ kind: "completed", wakeId: "wake_done" });
+		await journal.append({ kind: "dispatching", resourceId: "wake_open" });
+		await journal.append({ kind: "accepted", resourceId: "wake_done", target: { id: "session" } });
+		await journal.append({ kind: "completed", resourceId: "wake_done" });
 		expect(findUnclosedWakeEvents(await journal.read(), "session")).toEqual([
-			{ wakeId: "wake_open", lastKind: "dispatching", journalPath: undefined },
+			{ resourceId: "wake_open", lastKind: "dispatching", journalPath: undefined },
 		]);
 	});
 });

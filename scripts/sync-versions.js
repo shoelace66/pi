@@ -11,8 +11,9 @@ import { findPackageDirectories } from "./package-workspaces.mjs";
 
 const GENERATED_PACKAGE_SUFFIXES = [join("coding-agent", "install-lock")];
 
-const packageRoot = process.argv[2] ?? "packages";
-const workspacePackages = findPackageDirectories(packageRoot)
+const packageRoots = process.argv.length > 2 ? process.argv.slice(2) : ["packages", "apps"];
+const workspacePackages = packageRoots
+	.flatMap((packageRoot) => findPackageDirectories(packageRoot))
 	.filter((directory) => !GENERATED_PACKAGE_SUFFIXES.some((suffix) => directory.endsWith(suffix)))
 	.map((directory) => {
 		const path = join(directory, "package.json");

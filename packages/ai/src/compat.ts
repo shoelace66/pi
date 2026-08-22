@@ -60,7 +60,7 @@ import type {
 } from "./types.ts";
 
 /** @deprecated Static catalog read. Use `getBuiltinModel` from "@earendil-works/pi-ai/providers/all" or `Models.getModel()`. */
-export const getModel = getBuiltinModel;
+export const getModel = getBuiltinModel as typeof getBuiltinModel & ((provider: string, modelId: string) => any);
 
 /** @deprecated Static catalog read. Use `getBuiltinModels` from "@earendil-works/pi-ai/providers/all" or `Models.getModels()`. */
 export const getModels = getBuiltinModels;

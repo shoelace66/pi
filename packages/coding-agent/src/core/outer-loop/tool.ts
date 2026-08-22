@@ -87,6 +87,8 @@ export type OuterLoopToolContext = {
 	monitorRegistry: MonitorRegistry;
 	allowedRoot: string;
 	sampleMonitor?: (job: WakeJob) => Promise<WakeJob | undefined>;
+	registerWake?: (job: WakeJob) => Promise<void>;
+	cancelWake?: (wakeId: string, reason?: string) => Promise<void>;
 	requestRun?: () => void;
 	onChanged?: () => void;
 };
@@ -316,6 +318,7 @@ export function createOuterLoopTool(context: OuterLoopToolContext): ToolDefiniti
 			}
 			if (input.action === "cancel") {
 				const job = await context.store.cancelOwned(input.wakeId, ctx.sessionManager.getSessionId());
+				await context.cancelWake?.(job.id, "Cancelled by outer_loop tool");
 				context.onChanged?.();
 				return textResult(`Outer-loop job ${job.id} is ${job.status}.`, { job });
 			}
@@ -381,6 +384,14 @@ export function createOuterLoopTool(context: OuterLoopToolContext): ToolDefiniti
 			}
 
 			const result = await context.store.createOnce(normalizeCreateWakeInput(createInput));
+			try {
+				await context.registerWake?.(result.job);
+			} catch (error) {
+				if (!result.deduplicated) {
+					await context.store.cancelOwned(result.job.id, session.id).catch(() => undefined);
+				}
+				throw error;
+			}
 			const sampled =
 				!result.deduplicated && createInput.trigger.type === "monitor" && context.sampleMonitor
 					? await context.sampleMonitor(result.job)

@@ -109,6 +109,7 @@ import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts"
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
+import type { WakeContext } from "./wake/types.ts";
 
 // ============================================================================
 // Skill Block Parsing
@@ -225,6 +226,8 @@ export interface AgentSessionConfig {
 	extensionRunnerRef?: { current?: ExtensionRunner };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
 	sessionStartEvent?: SessionStartEvent;
+	/** Optional process-local Wake service exposed to extension contexts. */
+	wakeContext?: WakeContext;
 }
 
 export interface ExtensionBindings {
@@ -353,6 +356,7 @@ export class AgentSession {
 	private _excludedToolNames?: Set<string>;
 	private _baseToolsOverride?: Record<string, AgentTool>;
 	private _sessionStartEvent: SessionStartEvent;
+	private _wakeContext?: WakeContext;
 	private _extensionUIContext?: ExtensionUIContext;
 	private _extensionMode: ExtensionMode = "print";
 	private _extensionCommandContextActions?: ExtensionCommandContextActions;
@@ -389,6 +393,7 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		this._wakeContext = config.wakeContext;
 
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
@@ -2485,6 +2490,7 @@ export class AgentSession {
 				},
 				getSystemPrompt: () => this.systemPrompt,
 				getSystemPromptOptions: () => this._baseSystemPromptOptions,
+				getWakeContext: () => this._wakeContext,
 			},
 			{
 				registerProvider: (name, config) => {

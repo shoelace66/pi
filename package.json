@@ -1,8 +1,19 @@
 {
-	"name": "pi-monorepo",
+	"name": "autopi-monorepo",
+	"description": "AutoPi desktop and command-line AI agent with event-driven Wake automation",
 	"private": true,
+	"homepage": "https://github.com/shoelace66/AutoPi#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/shoelace66/AutoPi.git"
+	},
+	"bugs": {
+		"url": "https://github.com/shoelace66/AutoPi/issues"
+	},
+	"keywords": ["ai-agent", "automation", "coding-agent", "desktop", "electron", "pi-agent", "wake"],
 	"type": "module",
 	"workspaces": [
+		"apps/desktop",
 		"packages/*",
 		"packages/session-backends/*",
 		"packages/coding-agent/examples/extensions/with-deps",
@@ -13,9 +24,12 @@
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",
-		"build": "cd packages/tui && npm run build && cd ../telemetry && npm run build && cd ../ai && npm run build && cd ../agent && npm run build && cd ../session-backends/sqlite-node && npm run build && cd ../../protocol && npm run build && cd ../client && npm run build && cd ../server && npm run build && cd ../coding-agent && npm run build",
+		"build": "npm run build:core && npm run build:desktop",
+		"build:core": "cd packages/tui && npm run build && cd ../telemetry && npm run build && cd ../ai && npm run build && cd ../agent && npm run build && cd ../session-backends/sqlite-node && npm run build && cd ../../protocol && npm run build && cd ../client && npm run build && cd ../server && npm run build && cd ../coding-agent && npm run build",
 		"build:offline": "cd packages/tui && npm run build && cd ../telemetry && npm run build && cd ../ai && npm run build:offline && cd ../agent && npm run build && cd ../session-backends/sqlite-node && npm run build && cd ../../protocol && npm run build && cd ../client && npm run build && cd ../server && npm run build && cd ../coding-agent && npm run build",
-		"check": "biome check --write --error-on-warnings . && npm run check:pinned-deps && npm run check:ts-imports && npm run check:shrinkwrap && npm run check:install-lock:coding-agent && tsgo --noEmit && npm run check:browser-smoke",
+		"build:desktop": "npm run build --workspace=@autopi/desktop",
+		"check": "biome check --write --error-on-warnings . && npm run check:pinned-deps && npm run check:ts-imports && npm run check:shrinkwrap && npm run check:install-lock:coding-agent && tsgo --noEmit && npm run check:desktop && npm run check:browser-smoke",
+		"check:desktop": "npm run typecheck --workspace=@autopi/desktop",
 		"check:browser-smoke": "node scripts/check-browser-smoke.mjs",
 		"check:pinned-deps": "node scripts/check-pinned-deps.mjs",
 		"check:shrinkwrap": "node scripts/generate-coding-agent-shrinkwrap.mjs --check",
@@ -40,6 +54,8 @@
 		"publish": "npm run prepublishOnly && node scripts/publish.mjs",
 		"publish:dry": "npm run prepublishOnly && node scripts/publish.mjs --dry-run",
 		"release:local": "node scripts/local-release.mjs",
+		"package:desktop": "node scripts/package-desktop.mjs",
+		"release:desktop": "node scripts/package-desktop.mjs --sync D:\\PiDesktop",
 		"shrinkwrap:coding-agent": "node scripts/generate-coding-agent-shrinkwrap.mjs",
 		"install-lock:coding-agent": "node scripts/generate-coding-agent-install-lock.mjs",
 		"release:patch": "node scripts/release.mjs patch",
@@ -63,7 +79,7 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"version": "0.0.3",
+	"version": "0.84.1",
 	"overrides": {
 		"protobufjs": "7.6.5",
 		"rimraf": "6.1.2",

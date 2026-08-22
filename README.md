@@ -1,209 +1,170 @@
 <p align="center">
-  <a href="https://pi.dev">
-    <img alt="Pi logo" src="https://pi.dev/logo-auto.svg" width="112">
-  </a>
+  <img alt="AutoPi" src="autopi-wordmark-2565.png" width="460">
 </p>
 
-<h1 align="center">PI Outer Loop</h1>
+<h1 align="center">AutoPi</h1>
 
 <p align="center">
-  Native-compatible wakeups for Pi.<br>
-  Timers, file state, and process state without rewriting Pi's agent loop or plugins.
+  一体化桌面与命令行 AI Agent，能交互工作，也能在计时、文件或进程条件满足后自动回来继续。<br>
+  A desktop and command-line AI agent that can resume work automatically when time, file, or process conditions are met.
 </p>
 
 <p align="center">
-  <a href="https://github.com/shoelace66/pi/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/shoelace66/pi/ci.yml?branch=main&style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/shoelace66/pi?style=flat-square"></a>
-  <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white"></a>
-  <a href="https://github.com/earendil-works/pi"><img alt="Based on Pi" src="https://img.shields.io/badge/based%20on-Pi-111827?style=flat-square"></a>
+  <a href="https://github.com/shoelace66/AutoPi/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/shoelace66/AutoPi?display_name=tag&style=flat-square"></a>
+  <a href="https://github.com/shoelace66/AutoPi/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/shoelace66/AutoPi/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/shoelace66/AutoPi?style=flat-square"></a>
+  <img alt="Windows x64" src="https://img.shields.io/badge/desktop-Windows%20x64-3E56D0?style=flat-square&logo=windows11&logoColor=white">
 </p>
 
-> **Status:** core-first, in-process, and experimental. This repository publishes the core runtime only; GUI and desktop code are intentionally out of scope.
+> [!IMPORTANT]
+> AutoPi 是 [earendil-works/pi](https://github.com/earendil-works/pi) 的独立维护分支，于 **2026 年 8 月 20 日**完成分叉并固定上游基线。基线为 Pi `0.84.1`、提交 [`31b513e3`](https://github.com/earendil-works/pi/commit/31b513e316ab2b5ec736268350635511297fa3c1)。此后 AutoPi 独立演进，不自动同步后续上游版本。完整来源关系见 [UPSTREAM.md](UPSTREAM.md)。
 
-## Project identity
+## 下载与开始使用
 
-**PI Outer Loop** is a standalone, core-focused Pi distribution that adds a unified background wakeup capability while preserving Pi's native agent experience. It is intended for developers who want an agent to keep working while waiting for time, files, or processes, then resume the same Pi session when the condition is met.
+### Windows 新手推荐：绿色免安装包
 
-This repository is based on [Pi](https://github.com/earendil-works/pi), an MIT-licensed project by Mario Zechner and contributors. The upstream Pi code and license notices are retained; the changes and additions maintained here are documented in [UPSTREAM.md](UPSTREAM.md). The repository is not a replacement for Pi's extension API and does not require existing Pi plugins to be rewritten.
+1. 打开 [最新正式版本](https://github.com/shoelace66/AutoPi/releases/latest)。
+2. 下载 `AutoPi-0.84.1-win-x64.zip`。
+3. 右键 ZIP，选择“全部解压缩”。不要直接在压缩包预览窗口中运行。
+4. 双击解压目录里的 `AutoPi.exe`。
+5. 点击“打开文件夹”，选择你希望 AutoPi 协助处理的项目目录。
+6. 按界面提示选择模型并配置对应服务的 API Key，然后就可以直接描述任务。
 
-## What this project adds
+发布包根目录自带 `START-HERE-开始使用.txt`、许可证、构建清单和 SHA-256 校验信息。它不写入系统目录，也不需要管理员权限；删除整个文件夹即可移除。
 
-PI Outer Loop keeps Pi's normal interaction model and adds one model-facing tool, `outer_loop`:
+> Windows 可能对尚未进行商业代码签名的新程序显示 SmartScreen 提示。请先确认下载地址属于本仓库，并可用同一 Release 中的 `.sha256` 文件校验；确认无误后再选择“更多信息 → 仍要运行”。
 
-| Action | Purpose |
+更完整的操作说明见 [零基础使用教程](docs/GETTING-STARTED.zh-CN.md)。
+
+### 命令行用户
+
+Windows 发布包同时附带：
+
+- `autopi.cmd`：启动 AutoPi CLI；
+- `pi.cmd`：兼容原 Pi 命令入口；
+- `pi-wake.cmd`：向在线 AutoPi 会话投递 Wake 事件。
+
+## AutoPi 能做什么
+
+| 能力 | 说明 |
 | --- | --- |
-| `wait_time` | Wake at a relative or absolute time |
-| `wait_file` | Wake when a file is created, removed, modified, or changed in content |
-| `wait_process` | Wake when a Windows process exits |
-| `list` | Inspect active wake jobs and their clock entries |
-| `cancel` | Cancel an obsolete wake job from the current turn |
+| 桌面工作区 | 图形化会话、项目文件、Git、终端、模型和活动状态；会自动恢复每个工作区最近使用的会话。 |
+| CLI / TUI / SDK / RPC | 保留 Pi 的原生命令行、终端界面、SDK、RPC、会话和扩展兼容性。 |
+| 自动继续工作 | 通过统一 `outer_loop` 工具等待时间、文件变化或 Windows 进程结束，再恢复同一会话。 |
+| Wake 基础设施 | 按会话排队、能力校验、请求去重、本地 IPC、取消和 JSONL 日志。 |
+| 明暗主题 | AutoPi Dark 使用 `#090D20` 品牌基调；AutoPi Light 自动切换反色字标与浅色图标。 |
+| Windows 交付 | 带品牌图标的可执行文件、免安装 ZIP、构建清单、SHA-256 和同构建验证。 |
 
-The scheduler runs alongside the agent. Creating a wake job does not put the session to sleep: the agent can keep accepting user turns, and an obsolete job can be cancelled by either the agent or the user.
+### 一个“自动继续”的例子
 
-When a job is active, a small dynamic clock is appended to the end of the system prompt for normal and wake turns. With no active jobs, no clock text is added.
+直接告诉 AutoPi：
 
-## What changed from upstream Pi
+```text
+运行项目构建；如果还没结束就等待这个进程，结束后检查结果并修复错误。
+```
 
-| Area | PI Outer Loop change |
-| --- | --- |
-| Background work | Added the `outer_loop` intent-level tool for timers, file state, process exit, listing, and cancellation. |
-| Wake dispatch | Added `AgentWakeService`, settled-session queuing, request-id deduplication, unified wake prompts, and journaled wake events. |
-| Prompt integration | Added a final clock extension and wake-turn preflight without replacing Pi's agent loop or extension lifecycle. |
-| Provider boundary | Added an optional Moonshot MFJS Schema compatibility copy; registered plugin schemas remain unchanged. |
-| Verification | Added scheduler, monitor, cancellation, extension, provider, MCP-fixture, and native-compatibility regression coverage. |
+也可以让它按时间或文件变化继续：
 
-## Current status
+```text
+10 分钟后继续检查日志。
+等 output.json 被修改后读取结果并生成报告。
+```
 
-| Status | Scope |
-| --- | --- |
-| Available | Core in-process wake jobs, native CLI/TUI/SDK/RPC flows, extension compatibility, journal records, and Moonshot tool-schema compatibility. |
-| Experimental | The project is still evolving and should be treated as a development release rather than a hosted scheduling service. |
-| Not included | GUI/desktop design, cross-restart scheduling, durable task restoration, bundled MCP transport, authentication handoff, and real multi-agent routing. |
-| Next focus | Authentication handoff/resume and the third-development integration plan, while keeping the Pi compatibility boundary stable. |
+AutoPi 创建等待任务后仍可继续接收其他消息；过时任务可以由你或 Agent 取消。
 
-## Compatibility contract
+## 当前边界
 
-The product should feel like **native Pi plus one optional tool**:
+- Wake 注册目前随 AutoPi 进程存在；完全退出后不会自动恢复尚未触发的等待任务。
+- 本地 Wake 只面向在线会话，不提供离线队列、跨机器传输或托管调度服务。
+- 文件监控支持受支持的平台；进程等待目前以 Windows 为主，并采用轮询调度。
+- 第三方邮箱、聊天、MCP 等连接器没有捆绑在正式包内，可通过扩展或外部程序接入。
+- AutoPi 不是沙箱。它使用当前用户权限读取文件和运行命令，请只打开可信工作区并审查高风险操作。
 
-- Pi's interactive, print, JSON, RPC, TUI, SDK, session, model, provider, and configuration flows remain available.
-- Existing extensions keep their tools, commands, events, providers, prompt changes, resources, and session hooks.
-- `--tools`, `--exclude-tools`, `--no-tools`, and `--no-extensions` keep their native meaning.
-- The `packages/agent` agent loop is not replaced.
-- Wake turns reuse native `before_agent_start` preflight and the normal extension prompt chain.
-- Existing session files do not need migration; wake events are stored as Pi custom messages.
-- GUI code, cross-restart scheduling, and real multi-agent routing are not part of this repository.
+## 产品结构
 
-The detailed runtime contract is in [README-OUTER-LOOP.md](README-OUTER-LOOP.md).
+```text
+AutoPi Desktop       AutoPi CLI / TUI / SDK / RPC
+        \                       /
+                 AgentSession
+                       |
+               Pi-compatible loop
+                       |
+                  WakeRuntime
+          timer · file · process · IPC
+```
 
-## Quick start
+桌面端与命令行并不是两个 Agent：它们共用 `@earendil-works/pi-coding-agent`、模型配置、会话文件、扩展、工具和 Wake 运行时。
 
-### Windows from source
+## 从源码运行
+
+要求 Node.js `22.19+`。Windows：
 
 ```powershell
-git clone https://github.com/shoelace66/pi.git
-cd pi
+git clone https://github.com/shoelace66/AutoPi.git
+cd AutoPi
 npm install --ignore-scripts
-.\pi-test.bat
-```
-
-### macOS/Linux from source
-
-```bash
-git clone https://github.com/shoelace66/pi.git
-cd pi
-npm install --ignore-scripts
-./pi-test.sh
-```
-
-To build with the model data already in the checkout:
-
-```bash
 npm run build:offline
-node packages/coding-agent/dist/cli.js
+.\autopi.bat
 ```
 
-Run `pi --help` for the native CLI surface. Disable the added tool with `pi --exclude-tools outer_loop` or disable all tools with `pi --no-tools`.
-
-## Example
-
-Ask the agent to create a timer, or use the tool payload directly:
-
-```json
-{
-  "action": "wait_time",
-  "after": "00:05:00",
-  "objective": "检查构建结果并继续处理",
-  "reason": "等待构建完成"
-}
-```
-
-The next turn may show a clock entry such as:
-
-```text
-clock: wake_123 | timer | due 18:30+08:00 | 等待构建完成
-```
-
-For full schemas, file/process semantics, cancellation, journaling, and recovery notices, see [the outer-loop guide](README-OUTER-LOOP.md).
-
-## Native extension compatibility
-
-Extensions are still loaded through Pi's `ExtensionAPI`; no extension-specific Outer Loop adapter is required. The repository includes a small opt-in network fixture:
+启动命令行：
 
 ```powershell
-pi --extension .\packages\coding-agent\examples\extensions\network-probe.ts
+.\autopi.bat --cli
 ```
 
-It registers a read-only `network_probe` tool using the platform `fetch` API. This is a normal Pi extension, not a built-in MCP client. MCP remains an external integration point and requires a concrete MCP server/package configuration.
+macOS / Linux 当前以 CLI 为主：
 
-See [extension examples](packages/coding-agent/examples/extensions/README.md) and the wake/compaction regression tests under [packages/coding-agent/test](packages/coding-agent/test).
-
-## Architecture
-
-```text
-Pi TUI / CLI / SDK / RPC
-              |
-         AgentSession
-              |
-          Pi agent loop       (unchanged)
-              |
-       outer_loop custom tool
-              |
-      OuterLoopRuntime
-       |- InMemoryWakeStore
-       |- WakeScheduler + monitors
-       |- AgentWakeService
-       |- unified wake composer
-       `- dynamic clock extension
+```bash
+git clone https://github.com/shoelace66/AutoPi.git
+cd AutoPi
+npm install --ignore-scripts
+npm run build:offline
+./autopi.sh --cli
 ```
 
-The wake service resolves a target Pi session, waits for a busy target to settle, injects an `outer_loop_wake` custom message, runs the normal extension preflight, and waits for the session to settle. A request ID prevents duplicate injection.
+普通 `npm run build` 会尝试刷新在线模型目录；在离线或网络受限环境中优先使用 `npm run build:offline`。
 
-## Repository map
-
-| Path | Role |
-| --- | --- |
-| `packages/agent` | Pi's low-level agent runtime; not replaced by Outer Loop |
-| `packages/coding-agent` | Native Pi CLI, session integration, and extension API |
-| `packages/coding-agent/src/core/wakeup` | Outer Loop service, scheduler, monitors, journal, and clock |
-| `packages/coding-agent/examples/extensions` | Native extension examples, including the network fixture |
-| `packages/coding-agent/test/suite` | Faux-provider and regression coverage |
-| `README-OUTER-LOOP.md` | Full core behavior and interface reference |
-
-## Scope and roadmap
-
-Current core scope:
-
-- in-process wake jobs;
-- timer, file, and process monitors;
-- unified agent/user cancellation;
-- journaled wake events;
-- native extension and compaction compatibility tests.
-
-Deferred work:
-
-- GUI controls;
-- cross-restart task restoration;
-- a real multi-agent target resolver;
-- an MCP server or MCP transport bundled into Pi.
-
-## Development
+## 开发与验证
 
 ```bash
 npm run check
-./test.sh
+npm --workspace @autopi/desktop test
 ```
 
-For focused wake and extension tests:
+创建经过校验的 Windows x64 发布包：
 
-```bash
-npm exec vitest --run packages/coding-agent/test/suite/regressions/wakeup-runner-resume-e2e.test.ts --config packages/coding-agent/vitest.config.ts
-npm exec vitest --run packages/coding-agent/test/network-probe-extension.test.ts --config packages/coding-agent/vitest.config.ts
+```powershell
+npm run package:desktop
 ```
 
-Read [AGENTS.md](AGENTS.md) before making code changes. Keep GUI artifacts and generated release bundles out of the core branch.
+输出位于 `.artifacts`：
 
-## Upstream and license
+- `AutoPi-<version>-win-x64/`
+- `AutoPi-<version>-win-x64.zip`
+- `AutoPi-<version>-win-x64.zip.sha256`
 
-This project is built on the Pi Agent Harness packages and keeps their MIT licensing and attribution. See [UPSTREAM.md](UPSTREAM.md), [upstream Pi](https://github.com/earendil-works/pi), and [LICENSE](LICENSE) for the source relationship and complete license text.
+每次打包都会再次解压 ZIP，并对构建 ID、组件哈希和目录树摘要执行同构建验证。维护者还可运行 `npm run release:desktop`，把同一构建同步到 `D:\PiDesktop`。
 
-PI Outer Loop is released under the MIT License.
+## 仓库导航
+
+| 路径 | 内容 |
+| --- | --- |
+| [`apps/desktop`](apps/desktop) | AutoPi Electron 桌面应用 |
+| [`packages/coding-agent`](packages/coding-agent) | CLI、会话、扩展 API 与 Agent 集成 |
+| [`packages/coding-agent/src/core/wake`](packages/coding-agent/src/core/wake) | Wake 运行时、队列、IPC、能力和日志 |
+| [`packages/coding-agent/src/core/outer-loop`](packages/coding-agent/src/core/outer-loop) | 时间、文件、进程监控与 `outer_loop` 工具 |
+| [`docs/GETTING-STARTED.zh-CN.md`](docs/GETTING-STARTED.zh-CN.md) | 零基础中文教程 |
+| [`docs/AUTOPI-DESKTOP.md`](docs/AUTOPI-DESKTOP.md) | 桌面集成与发布说明 |
+| [`README-OUTER-LOOP.md`](README-OUTER-LOOP.md) | Wake / Outer Loop 行为和接口细节 |
+| [`UPSTREAM.md`](UPSTREAM.md) | 上游基线、继承范围与署名 |
+
+## 贡献与安全
+
+提交代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [AGENTS.md](AGENTS.md)。安全问题请按 [SECURITY.md](SECURITY.md) 使用 GitHub 私密安全报告，不要公开披露凭据或可利用细节。
+
+## 上游与许可证
+
+AutoPi 保留 Pi 的 Git 历史、包结构、原生 Agent loop、CLI/TUI/SDK/RPC、扩展接口和 MIT 许可证署名。AutoPi 新增的桌面产品、Wake 运行时、Outer Loop 集成与交付工具同样以 MIT License 发布。
+
+感谢 [Mario Zechner](https://github.com/badlogic) 与 [earendil-works/pi](https://github.com/earendil-works/pi) 的原始工作和所有上游贡献者。详见 [UPSTREAM.md](UPSTREAM.md) 与 [LICENSE](LICENSE)。

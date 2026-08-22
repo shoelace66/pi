@@ -46,6 +46,7 @@ import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
+import { OuterLoopRuntime } from "./core/outer-loop/runtime.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -59,7 +60,8 @@ import { assertValidSessionId, SessionManager } from "./core/session-manager.ts"
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
-import { OuterLoopRuntime } from "./core/wakeup/outer-loop-runtime.ts";
+import { JsonlWakeJournal } from "./core/wake/journal.ts";
+import { WakeRuntime } from "./core/wake/runtime.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
@@ -702,6 +704,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const trustStore = new ProjectTrustStore(agentDir);
 	const sessionCwd = sessionManager.getCwd();
+	let wakeRuntime: WakeRuntime | undefined;
 	let outerLoopRuntime: OuterLoopRuntime | undefined;
 	const autoTrustOnReloadCwd =
 		parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
@@ -825,6 +828,7 @@ export async function main(args: string[], options?: MainOptions) {
 			services,
 			sessionManager,
 			sessionStartEvent,
+			wakeRuntime,
 			model: sessionOptions.model,
 			thinkingLevel: sessionOptions.thinkingLevel,
 			scopedModels: sessionOptions.scopedModels,
@@ -847,24 +851,28 @@ export async function main(args: string[], options?: MainOptions) {
 			diagnostics,
 		};
 	};
-	outerLoopRuntime =
-		appMode === "interactive"
-			? new OuterLoopRuntime({
-					cwd: sessionCwd,
+	if (appMode === "interactive") {
+		const wakeJournal = new JsonlWakeJournal({ agentDir });
+		wakeRuntime = new WakeRuntime({
+			agentDir,
+			journal: wakeJournal,
+			createSession: async (sessionFile, cwd) => {
+				const restored = await createRuntime({
+					cwd,
 					agentDir,
-					createSession: async (sessionFile, cwd) => {
-						const restored = await createRuntime({
-							cwd,
-							agentDir,
-							sessionManager: SessionManager.open(sessionFile, sessionDir, cwd),
-							sessionStartEvent: { type: "session_start", reason: "resume" },
-						});
-						return restored.session;
-					},
-					createToolForSession: (_sessionFile, cwd) =>
-						!parsed.noTools ? outerLoopRuntime?.createTool(cwd) : undefined,
-				})
-			: undefined;
+					sessionManager: SessionManager.open(sessionFile, sessionDir, cwd),
+					sessionStartEvent: { type: "session_start", reason: "resume" },
+				});
+				return restored.session;
+			},
+		});
+		outerLoopRuntime = new OuterLoopRuntime({
+			cwd: sessionCwd,
+			wakeRuntime,
+			journal: wakeJournal,
+			stopWakeRuntime: true,
+		});
+	}
 	time("createRuntime");
 	const runtime = await createAgentSessionRuntime(createRuntime, {
 		cwd: sessionManager.getCwd(),

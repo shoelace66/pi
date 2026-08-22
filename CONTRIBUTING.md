@@ -1,55 +1,57 @@
-# Contributing to PI Outer Loop
+# Contributing to AutoPi
 
-PI Outer Loop is a core-only layer on top of Pi. Contributions should preserve the experience of native Pi and should not require existing Pi extensions, skills, providers, or session files to change.
+AutoPi is an independently maintained desktop and command-line agent derived from Pi. Contributions should improve the unified product while preserving the inherited Pi compatibility boundary.
 
-## Scope
+## Project scope
 
 In scope:
 
-- `packages/coding-agent/src/core/wakeup` and its tests;
-- native `ExtensionAPI` compatibility;
-- scheduler, monitor, journal, clock, cancellation, and wake dispatch behavior;
-- documentation and reproducible core tests.
+- AutoPi Desktop UI, Electron integration, accessibility, localization, and Windows delivery;
+- Pi-compatible CLI, TUI, SDK, RPC, sessions, extensions, providers, and tools;
+- Wake runtime, local IPC, scheduler, monitor, journal, clock, cancellation, and dispatch behavior;
+- documentation, tests, release reproducibility, and beginner-friendly installation.
 
-Out of scope for this repository:
-
-- GUI or desktop application design;
-- cross-restart scheduling;
-- a bundled MCP server or transport;
-- real multi-agent routing.
+Current product boundaries include process-local wake registrations, online local delivery, and no bundled cross-machine transport or hosted scheduler. Proposals may extend those boundaries, but should document migration, security, and compatibility impact.
 
 ## Before opening a pull request
 
-1. Read [AGENTS.md](AGENTS.md).
-2. Keep the change focused and explain the compatibility impact.
-3. Do not add generated release bundles, desktop artifacts, credentials, or private session files.
-4. Preserve native Pi CLI flags, session formats, extension hooks, and tool filtering semantics.
-5. Add a regression test for behavior changes.
+1. Read [AGENTS.md](AGENTS.md), [README.md](README.md), and [UPSTREAM.md](UPSTREAM.md).
+2. Keep the change focused and explain user-visible behavior.
+3. Do not add generated release bundles, credentials, private sessions, personal paths, or model-provider secrets.
+4. Preserve upstream copyright and MIT license notices.
+5. Preserve Pi CLI flags, session formats, extension hooks, tool filtering, and provider behavior unless the change explicitly migrates them.
+6. Add or update regression coverage for behavior changes.
 
-Run the relevant checks from the repository root:
+Run the repository checks:
 
 ```bash
 npm run check
-./test.sh
+npm --workspace @autopi/desktop test
 ```
 
-For focused changes, also run the package test that covers the modified behavior. Wake tests use the faux provider and must not require a real provider key.
+Run the focused package tests that cover the modified area. Tests should use fixtures or faux providers and must not require a real provider key.
 
-## Extension compatibility rule
+## Desktop changes
 
-Use the existing Pi `ExtensionAPI`. Do not add a new event type or require a plugin-specific adapter merely to support Outer Loop. If a design would change existing extension behavior, revise the Outer Loop integration instead.
+- Verify dark and light themes, window controls, keyboard focus, and the initial workspace flow.
+- Keep the renderer isolated behind the typed Electron bridge; do not expose Node.js directly to web content.
+- Keep the desktop and CLI on the same `AgentSession` and core packages instead of duplicating Agent behavior.
+- Do not commit `.artifacts`, packaged Electron runtimes, or local user-data profiles.
 
-## Pull requests
+## Wake and extension compatibility
 
-Describe:
+Use the existing Pi `ExtensionAPI` and AutoPi Wake interfaces. An ordinary extension should not need an Outer Loop-specific adapter. Wake turns must continue through native preflight and the normal prompt chain.
 
-- the problem and the user-visible behavior;
-- the exact packages and interfaces touched;
-- how ordinary Pi turns and wake turns were validated;
-- any behavior intentionally deferred to a later release.
+## Pull request description
 
-The pull request template is intentionally small so review can focus on the core runtime.
+Include:
+
+- the problem and the resulting user behavior;
+- the packages, interfaces, and platforms affected;
+- checks and tests performed;
+- security or compatibility considerations;
+- intentionally deferred work.
 
 ## License
 
-By contributing, you agree that your contribution is released under the repository's [MIT License](LICENSE).
+By contributing, you agree that your contribution is released under the repository's [MIT License](LICENSE). Upstream Pi attribution is documented in [UPSTREAM.md](UPSTREAM.md).

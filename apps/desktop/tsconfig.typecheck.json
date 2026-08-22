@@ -1,0 +1,12 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": "../..",
+		"paths": {
+			"@pi/desktop-shared/*": ["./shared/*"],
+			"@earendil-works/pi-coding-agent": ["../../packages/coding-agent/src/index.ts"]
+		}
+	},
+	"include": ["electron/**/*.ts", "electron/**/*.cts", "shared/**/*.ts", "../../packages/coding-agent/src/**/*.d.ts"]
+}

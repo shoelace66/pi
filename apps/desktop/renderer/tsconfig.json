@@ -1,0 +1,9 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"lib": ["ES2022", "DOM"],
+		"noEmit": true,
+		"types": ["vite/client", "react", "react-dom"]
+	},
+	"include": ["index.html", "src/**/*.ts", "src/**/*.tsx"]
+}

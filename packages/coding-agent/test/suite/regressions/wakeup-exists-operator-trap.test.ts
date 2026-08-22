@@ -2,12 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createFileStateAdapter } from "../../../src/core/wakeup/adapters/file-state.ts";
-import { evaluateMonitorCondition } from "../../../src/core/wakeup/condition-evaluator.ts";
-import { InMemoryWakeStore } from "../../../src/core/wakeup/in-memory-wake-store.ts";
-import { MonitorRegistry } from "../../../src/core/wakeup/monitor-registry.ts";
-import type { MonitorObservation, WakeJob } from "../../../src/core/wakeup/types.ts";
-import { WakeScheduler } from "../../../src/core/wakeup/wake-scheduler.ts";
+import { createFileStateAdapter } from "../../../src/core/outer-loop/adapters/file-state.ts";
+import { evaluateMonitorCondition } from "../../../src/core/outer-loop/condition-evaluator.ts";
+import { InMemoryWakeStore } from "../../../src/core/outer-loop/in-memory-wake-store.ts";
+import { MonitorRegistry } from "../../../src/core/outer-loop/monitor-registry.ts";
+import type { MonitorObservation, WakeJob } from "../../../src/core/outer-loop/types.ts";
+import { WakeScheduler } from "../../../src/core/outer-loop/wake-scheduler.ts";
 
 const tempDirs: string[] = [];
 

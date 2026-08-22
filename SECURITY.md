@@ -1,10 +1,10 @@
 # Security policy
 
-PI Outer Loop runs inside the permissions of the local Pi process. It is not a sandbox and does not make untrusted repositories, prompts, extensions, skills, or MCP servers safe.
+AutoPi runs with the permissions of the current local user. It is not a sandbox and does not make untrusted repositories, prompts, extensions, skills, model output, or MCP servers safe.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a security-sensitive report. Use a private GitHub Security Advisory for [shoelace66/pi](https://github.com/shoelace66/pi/security/advisories/new). Include:
+Do not open a public issue for a security-sensitive report. Use a private GitHub Security Advisory for [shoelace66/AutoPi](https://github.com/shoelace66/AutoPi/security/advisories/new). Include:
 
 - the affected commit, package, and configuration;
 - a minimal reproduction or proof of concept;
@@ -15,7 +15,7 @@ Remove credentials, private session data, and personal filesystem paths from rep
 
 ## Scope
 
-In scope are vulnerabilities in the distributed core packages, CLI integration, wake scheduler, monitor adapters, journal handling, and repository workflows when the issue crosses a boundary that Pi is expected to enforce.
+In scope are vulnerabilities in AutoPi Desktop, distributed core packages, CLI integration, Electron bridge, wake scheduler, monitor adapters, journal handling, release packaging, and repository workflows when the issue crosses an intended security boundary.
 
 The following are expected trust-boundary limitations rather than vulnerabilities:
 
