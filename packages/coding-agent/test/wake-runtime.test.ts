@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentSession } from "../src/core/agent-session.ts";
 import { WakeClient } from "../src/core/wake/client.ts";
@@ -54,6 +55,8 @@ function fakeSession(
 const runtimes: WakeRuntime[] = [];
 const tempDirs: string[] = [];
 const children: ChildProcessWithoutNullStreams[] = [];
+const tsxCliPath = fileURLToPath(new URL("../../../node_modules/tsx/dist/cli.mjs", import.meta.url));
+const wakeRuntimeChildPath = fileURLToPath(new URL("./fixtures/wake-runtime-child.ts", import.meta.url));
 
 async function makeTempDir(): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), "pi-wake-runtime-"));
@@ -63,10 +66,14 @@ async function makeTempDir(): Promise<string> {
 
 afterEach(async () => {
 	for (const child of children.splice(0)) {
-		if (child.exitCode === null) child.stdin.write("stop\n");
 		await new Promise<void>((resolveExit) => {
-			if (child.exitCode !== null) resolveExit();
-			else child.once("exit", () => resolveExit());
+			if (child.exitCode !== null) {
+				resolveExit();
+				return;
+			}
+			child.once("exit", () => resolveExit());
+			child.stdin.once("error", () => undefined);
+			if (child.stdin.writable) child.stdin.end("stop\n");
 		});
 	}
 	await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
@@ -237,8 +244,8 @@ describe("WakeRuntime local IPC", () => {
 		const child = spawn(
 			process.execPath,
 			[
-				join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"),
-				join(process.cwd(), "packages", "coding-agent", "test", "fixtures", "wake-runtime-child.ts"),
+				tsxCliPath,
+				wakeRuntimeChildPath,
 				join(directory, "target-runtime"),
 				join(directory, "target-session.jsonl"),
 				"target-session",
