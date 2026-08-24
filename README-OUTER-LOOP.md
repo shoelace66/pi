@@ -1,12 +1,12 @@
 # AutoPi Wake / Outer Loop：Agent 外循环
 
-> 当前状态说明，更新于 2026-08-22。本文聚焦 AutoPi 的 Wake / Outer Loop 子系统；桌面产品与新手使用见 [README.md](README.md)。
+> 当前状态说明，更新于 2026-08-23。本文聚焦 AutoPi 的后台任务与 Wake / Outer Loop 子系统；桌面产品与新手使用见 [README.md](README.md)。
 
-AutoPi `0.84.1` 正式版保留 Pi 兼容的 agent loop，并增加一个统一 `outer_loop` 工具。外循环与 agent loop 解耦，任务在同一进程内并行等待；Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `WakeRuntime` 恢复目标 session 执行一轮。
+AutoPi 保留 Pi 兼容的 agent loop，并增加通用 `background_task` 与统一 `outer_loop` 工具。长命令由 `BackgroundTaskManager` 托管；外循环与 agent loop 解耦并在同一进程内等待。Agent 仍可继续处理用户输入和其他任务，条件满足后通过统一 `WakeRuntime` 恢复目标 session 执行一轮。
 
-本轮已落地原生兼容边界：没有活动等待任务时不追加 clock prompt；原生 CLI/TUI/SDK/RPC、扩展生命周期、provider、session 和资源机制继续由 Pi 处理，插件无需感知或适配 WakeService。AutoPi Desktop 已复用同一核心运行时；跨重启调度和真实 multi-agent 仍不在当前范围。
+本轮已落地原生兼容边界：没有活动等待任务时不追加 clock prompt；原生 CLI/TUI/SDK/RPC、扩展生命周期、provider、session 和资源机制继续由 Pi 处理，插件无需感知或适配 WakeService。AutoPi Desktop 与 VS Code RPC 后端复用同一核心运行时；跨重启调度和真实 multi-agent 仍不在当前范围。
 
-当前仍有几个明确限制：认证完成后不会自动恢复被暂停的用户 turn，需要用户发送下一轮；Outer Loop 只在 interactive 模式启动，print/JSON/RPC 保持原生行为但不运行后台调度；唤醒任务只在当前进程内有效；MCP 只提供外部集成边界和 Schema fixture，不内置 server/transport；真实 Kimi/Moonshot 调用和 multi-agent 路由仍待后续开发。
+当前仍有几个明确限制：认证完成后不会自动恢复被暂停的用户 turn，需要用户发送下一轮；Outer Loop 在 interactive 和 RPC 模式启动，print/JSON 不启动后台调度；托管任务与唤醒任务只在当前进程内有效；MCP 只提供外部集成边界和 Schema fixture，不内置 server/transport；真实 Kimi/Moonshot 调用和 multi-agent 路由仍待后续开发。
 
 Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文只说明本项目新增的外循环能力和当前限制。
 
@@ -17,17 +17,18 @@ Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文
 - **内循环**：位于 `packages/agent`，负责模型请求、工具调用、上下文推进和单次 agent turn。
 - **Wake 基础设施**：位于 `packages/coding-agent/src/core/wake`，负责能力、队列、本地 IPC、统一消息和日志。
 - **外循环**：位于 `packages/coding-agent/src/core/outer-loop`，负责任务创建、定时或状态轮询、取消和自动恢复。
+- **后台任务**：位于 `packages/coding-agent/src/core/background-task`，负责长命令、PID、日志、退出码、取消和进程树清理。
 
 本阶段没有改写 `packages/agent` 的 agent loop。外循环通过 Pi 已有的 custom tool、hidden inline extension 和可选的 custom-turn preflight 接入。
 
 ```text
-用户 <-> AutoPi Desktop / CLI <-> AgentSession <-> agent loop
+用户 <-> AutoPi Desktop / VS Code / CLI <-> AgentSession <-> agent loop
                                   ^
                                   |
                         outer_loop tool
                                   |
                        OuterLoopRuntime
-                         |- timer / file / process monitors
+                         |- timer / file / process / task monitors
                          |- scheduler + cancellation
                          `- dynamic clock extension
                                   |
@@ -37,7 +38,7 @@ Pi 上游项目及各 package 的通用说明见 [README.md](README.md)。本文
                          `- prompt + journal
 ```
 
-Outer Loop 子系统不实现界面；AutoPi Desktop 和 CLI 都通过同一个 `AgentSession` 使用它。当前不包含独立托管 server、离线队列、跨机器传输或跨重启任务恢复。journal 只记录事件并提供审计信息，不自动恢复进程结束时丢失的调度任务。旧的 `--mode server` 不是当前启动方式。
+Outer Loop 子系统不实现界面；AutoPi Desktop、VS Code RPC 后端和 CLI 都通过同一个 `AgentSession` 使用它。当前不包含独立托管 server、离线队列、跨机器传输或跨重启任务恢复。journal 只记录事件并提供审计信息，不自动恢复进程结束时丢失的调度任务。旧的 `--mode server` 不是当前启动方式。
 
 ## 2. 启动
 
@@ -97,11 +98,11 @@ pi --mode server
 交互模式启动时会：
 
 1. 创建进程内 `OuterLoopRuntime`。
-2. 注册文件状态和 Windows 进程状态适配器。
-3. 把单一 `outer_loop` 工具注入当前 `AgentSession`。
+2. 注册文件、Windows 进程和托管任务状态适配器。
+3. 把 `outer_loop` 与 `background_task` 工具注入当前 `AgentSession`。
 4. 启动 scheduler，然后进入原生 Pi TUI。
 5. 条件满足时，通过统一 wake custom message、原生 `before_agent_start` preflight 恢复对应会话并自动执行一轮。
-6. TUI 退出时停止 scheduler，所有未完成任务随进程结束。
+6. 宿主退出时停止 scheduler，并取消所有托管命令及其进程树。
 
 当前会话唤醒时复用现有 `AgentSession`。用户切换会话后，旧会话的任务仍可在后台触发；runtime 会从该会话文件恢复临时 session，不会把后台消息插入当前聊天。
 
@@ -118,7 +119,7 @@ pi --no-tools
 
 外循环任务要求持久化 session，因此 `--no-session` 下不能创建任务。`list` 和 `cancel` 只操作当前会话拥有的任务。
 
-第二次升级后的模型接口只有以下意图动作：`wait_time`、`wait_file`、`wait_process`、`list`、`cancel`。模型不再看到内部 `field/operator/expected/activation` 条件 DSL；旧 sleeping session、Deferred Inbox 和 legacy wake 工具已经从核心实现与导出中删除。
+模型接口只有以下意图动作：`wait_time`、`wait_file`、`wait_process`、`wait_task`、`list`、`cancel`。模型不再看到内部 `field/operator/expected/activation` 条件 DSL；旧 sleeping session、Deferred Inbox 和 legacy wake 工具已经从核心实现与导出中删除。
 
 外挂唤醒不会阻塞 Agent。每次新的 user turn 或 wake turn，在 system prompt 末尾最多显示 10 条动态 clock；Agent 可调用 `outer_loop.cancel({"wakeId":"..."})` 取消过期任务。用户取消通过核心 API 完成：带 note 立即走统一 wake 入口，不带 note 在下一次正常 turn 提示“用户取消了该定时/监测任务”。
 
@@ -217,7 +218,32 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 - 首次查询失败时，任务保持 `armed`，错误会出现在 `list` 和 journal 中；查询错误不会被当成条件满足。
 - 首次不匹配时，任务进入正常 polling。
 
-### 4.4 查询与取消
+### 4.4 托管后台命令与 `wait_task`
+
+预计跨越当前回合的命令先通过 `background_task.start` 启动：
+
+```json
+{ "action": "start", "command": "python train.py", "cwd": "." }
+```
+
+返回值包括 `taskId`、PID、工作目录、状态和 stdout/stderr 合并日志路径。随后等待该任务完成：
+
+```json
+{
+  "action": "wait_task",
+  "taskId": "task_xxx",
+  "event": "finished",
+  "pollInterval": "00:00:30",
+  "timeout": { "kind": "after", "value": "06:00:00", "onTimeout": "wake" },
+  "reason": "等待训练命令结束",
+  "objective": "检查训练结果，成功后运行测试并生成报告",
+  "checkFirst": ["检查任务状态和退出码", "读取日志", "检查已有产物"]
+}
+```
+
+唤醒后必须先用 `background_task.status` 复查任务、退出码、日志和已有产物。失败或取消的前置任务默认停止依赖步骤；已有测试或报告产物应先检查，避免重复执行。后台命令仍经过通用 tool-call 扩展钩子和项目根目录限制，不因异步执行绕过权限或审批策略。
+
+### 4.5 查询与取消
 
 ```json
 { "action": "list" }
@@ -244,10 +270,11 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 - `modified`：首次采样建立元数据基线，后续创建、删除或元数据变化时满足。
 - `content_changed`：首次采样建立 SHA-256 基线，后续创建、删除或内容变化时满足。
 - `process.exited`：进程已退出或 PID 已不存在时满足。
+- `task.finished`：托管任务进入 `succeeded`、`failed` 或 `cancelled` 时满足。
 
 监测轮询间隔支持毫秒整数或 `HH:MM:SS`，范围为 30 秒至 24 小时。scheduler 自身默认约每 15 秒运行一次，因此实际触发可能晚于名义到期时间一个 tick。
 
-每个文件或进程任务都必须显式提供 `timeout.kind`、`timeout.value` 和 `timeout.onTimeout`。超时值支持带时区 ISO 时间或相对 `HH:MM:SS`，范围为 1 分钟至 7 天。
+每个文件、进程或托管任务等待都必须显式提供 `timeout.kind`、`timeout.value` 和 `timeout.onTimeout`。超时值支持带时区 ISO 时间或相对 `HH:MM:SS`，范围为 1 分钟至 7 天。
 
 - `onTimeout: "wake"`：超时后以 `monitor_timeout` 恢复 agent。
 - `onTimeout: "expire"`：任务进入 `expired`，不调用模型。
@@ -263,14 +290,15 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 `outer_loop` 对模型的说明由三部分组成，不是单独一个 prompt 文件：
 
 1. [基础 system prompt](packages/coding-agent/src/core/system-prompt.ts)。
-2. [`outer_loop` 的 prompt snippet、guidelines 和意图级 JSON schema](packages/coding-agent/src/core/outer-loop/tool.ts)。
+2. [`outer_loop` 与 `background_task` 的 prompt snippet、guidelines 和意图级 JSON schema](packages/coding-agent/src/core/outer-loop/tool.ts)。
 3. [每轮动态 clock](packages/coding-agent/src/core/outer-loop/clock-extension.ts)。没有活动任务时不追加任何文本。
 4. [统一 wake custom message](packages/coding-agent/src/core/wake/prompt.ts)。timer、monitor、用户取消和未来 agent 信件共用 JSON 编码格式。
 
 ## 7. 已知限制
 
 - 调度任务只在当前进程的 `InMemoryWakeStore` 中有效；关闭 Pi 后不自动恢复。journal 持久保留在 `<agentDir>/logs/wake-events.jsonl`，下次启动只注入恢复通知。
-- 外循环只在普通交互模式启动，RPC/print 模式不启动该 runtime。
+- 外循环在普通交互模式和 RPC 模式启动；print/JSON 模式不启动该 runtime。
+- 托管后台命令随宿主进程存在；关闭 CLI、桌面或 VS Code 窗口会终止任务树。重启只显示恢复通知，不自动续跑。
 - `wait_process` 当前只支持 Windows。
 - 文件监测使用 polling，不是 `fs.watch`；进程监测也使用 polling，不是进程退出事件。
 - 同一时刻满足的多个 job 会分别恢复 agent，每个 job 对应一轮。
@@ -294,6 +322,7 @@ PID 不存在是正常观测结果，不是查询错误。Windows 无法提供�
 
 - `packages/coding-agent/test/wakeup.test.ts`
 - `packages/coding-agent/test/wakeup-v2.test.ts`
+- `packages/coding-agent/test/background-task.test.ts`
 - `packages/coding-agent/test/footer-data-provider.test.ts`
 - `packages/coding-agent/test/suite/regressions/wakeup-exists-operator-trap.test.ts`
 - `packages/coding-agent/test/suite/regressions/wakeup-runner-resume-e2e.test.ts`

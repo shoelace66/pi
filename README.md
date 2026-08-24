@@ -5,8 +5,11 @@
 <h1 align="center">AutoPi</h1>
 
 <p align="center">
-  一体化桌面与命令行 AI Agent，能交互工作，也能在计时、文件或进程条件满足后自动回来继续。<br>
-  A desktop and command-line AI agent that can resume work automatically when time, file, or process conditions are met.
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  One AI agent across desktop, VS Code, and the command line—built to manage long-running tasks and continue automatically when time, file, process, or task conditions are met.
 </p>
 
 <p align="center">
@@ -14,90 +17,122 @@
   <a href="https://github.com/shoelace66/AutoPi/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/shoelace66/AutoPi/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/shoelace66/AutoPi?style=flat-square"></a>
   <img alt="Windows x64" src="https://img.shields.io/badge/desktop-Windows%20x64-3E56D0?style=flat-square&logo=windows11&logoColor=white">
+  <img alt="Linux CLI x64" src="https://img.shields.io/badge/CLI-Linux%20x64-F0B90B?style=flat-square&logo=linux&logoColor=black">
+  <img alt="VS Code Windows and Linux x64" src="https://img.shields.io/badge/VS%20Code-0.84.1%20Windows%20%7C%20Linux%20x64-31A8FF?style=flat-square&logo=visualstudiocode&logoColor=white">
 </p>
 
 > [!IMPORTANT]
-> AutoPi 是 [earendil-works/pi](https://github.com/earendil-works/pi) 的独立维护分支，于 **2026 年 8 月 20 日**完成分叉并固定上游基线。基线为 Pi `0.84.1`、提交 [`31b513e3`](https://github.com/earendil-works/pi/commit/31b513e316ab2b5ec736268350635511297fa3c1)。此后 AutoPi 独立演进，不自动同步后续上游版本。完整来源关系见 [UPSTREAM.md](UPSTREAM.md)。
+> AutoPi is an independently maintained fork of [earendil-works/pi](https://github.com/earendil-works/pi), forked on **August 20, 2026** from Pi `0.84.1` at commit [`31b513e3`](https://github.com/earendil-works/pi/commit/31b513e316ab2b5ec736268350635511297fa3c1). AutoPi evolves independently and does not automatically track later upstream releases. See [UPSTREAM.md](UPSTREAM.md) for complete provenance and attribution.
 
-## 下载与开始使用
+## Download and get started
 
-### Windows 新手推荐：绿色免安装包
+### Recommended for new Windows users: portable desktop package
 
-1. 打开 [最新正式版本](https://github.com/shoelace66/AutoPi/releases/latest)。
-2. 下载 `AutoPi-0.84.1-win-x64.zip`。
-3. 右键 ZIP，选择“全部解压缩”。不要直接在压缩包预览窗口中运行。
-4. 双击解压目录里的 `AutoPi.exe`。
-5. 点击“打开文件夹”，选择你希望 AutoPi 协助处理的项目目录。
-6. 按界面提示选择模型并配置对应服务的 API Key，然后就可以直接描述任务。
+1. Open the [latest release](https://github.com/shoelace66/AutoPi/releases/latest).
+2. Download `AutoPi-0.84.1-win-x64.zip`.
+3. Right-click the ZIP and select **Extract All**. Do not run the application from the archive preview.
+4. Double-click `AutoPi.exe` in the extracted directory.
+5. Select **Open Folder** and choose the project you want AutoPi to work on.
+6. Choose a model, configure the corresponding API key, and describe your task in plain language.
 
-发布包根目录自带 `START-HERE-开始使用.txt`、许可证、构建清单和 SHA-256 校验信息。它不写入系统目录，也不需要管理员权限；删除整个文件夹即可移除。
+The release root includes `START-HERE-开始使用.txt`, licenses, a build manifest, and SHA-256 verification data. The portable build does not write to system directories or require administrator privileges; remove it by deleting the extracted folder.
 
-> Windows 可能对尚未进行商业代码签名的新程序显示 SmartScreen 提示。请先确认下载地址属于本仓库，并可用同一 Release 中的 `.sha256` 文件校验；确认无误后再选择“更多信息 → 仍要运行”。
+> Windows SmartScreen might warn about a new application that has not yet been commercially code-signed. Verify that the package came from this repository and compare it with the `.sha256` file in the same release before selecting **More info → Run anyway**.
 
-更完整的操作说明见 [零基础使用教程](docs/GETTING-STARTED.zh-CN.md)。
+For a more detailed walkthrough, see the [zero-experience Chinese guide](docs/GETTING-STARTED.zh-CN.md).
 
-### 命令行用户
+### Linux x64 command-line package
 
-Windows 发布包同时附带：
+1. Download `AutoPi-0.84.1-linux-x64.tar.gz` and its matching `.sha256` file.
+2. Run `sha256sum -c AutoPi-0.84.1-linux-x64.tar.gz.sha256`.
+3. Extract the archive, enter its directory, and run `./autopi`.
 
-- `autopi.cmd`：启动 AutoPi CLI；
-- `pi.cmd`：兼容原 Pi 命令入口；
-- `pi-wake.cmd`：向在线 AutoPi 会话投递 Wake 事件。
+The Linux package includes `autopi`, the compatible `pi` command, `pi-wake`, and the required runtime. Node.js is not required. It targets glibc x64 distributions including Ubuntu 22.04/24.04 and Debian 12. See the [Linux x64 beginner guide](docs/LINUX-GETTING-STARTED.en.md).
 
-## AutoPi 能做什么
+### VS Code users: platform-specific VSIX
 
-| 能力 | 说明 |
+1. Download `AutoPi-0.84.1-win32-x64.vsix` for Windows or `AutoPi-0.84.1-linux-x64.vsix` for Linux, Remote SSH, and WSL, together with the matching `.sha256` file.
+2. In the VS Code Extensions view, select **Install from VSIX…** from the top-right menu.
+3. Open and trust your project folder.
+4. Run **AutoPi: Configure API Key**, then open AutoPi from the Activity Bar.
+
+Each VSIX includes an AutoPi x64 backend for its target platform. Users do not need to install Node.js or the AutoPi CLI separately. Remote workspaces require the Linux VSIX in the remote extension host. See the [VS Code setup guide](docs/VSCODE-GETTING-STARTED.zh-CN.md) for installation, checksum verification, configuration, logs, and a training-to-evaluation example.
+
+### Command-line users
+
+The Windows package also includes:
+
+- `autopi.cmd` to launch the AutoPi CLI;
+- `pi.cmd` as a compatibility entry point for Pi;
+- `pi-wake.cmd` to deliver Wake events to an online AutoPi session.
+
+The Linux package provides extensionless `autopi`, `pi`, and `pi-wake` executables.
+
+## What AutoPi can do
+
+| Capability | Description |
 | --- | --- |
-| 桌面工作区 | 图形化会话、项目文件、Git、终端、模型和活动状态；会自动恢复每个工作区最近使用的会话。 |
-| CLI / TUI / SDK / RPC | 保留 Pi 的原生命令行、终端界面、SDK、RPC、会话和扩展兼容性。 |
-| 自动继续工作 | 通过统一 `outer_loop` 工具等待时间、文件变化或 Windows 进程结束，再恢复同一会话。 |
-| Wake 基础设施 | 按会话排队、能力校验、请求去重、本地 IPC、取消和 JSONL 日志。 |
-| 明暗主题 | AutoPi Dark 使用 `#090D20` 品牌基调；AutoPi Light 自动切换反色字标与浅色图标。 |
-| Windows 交付 | 带品牌图标的可执行文件、免安装 ZIP、构建清单、SHA-256 和同构建验证。 |
+| Desktop workspace | Graphical sessions, project files, Git, terminals, models, and activity state, with the most recent session restored per workspace. |
+| VS Code sidebar | Independent of Copilot and built-in Chat; isolates sessions per workspace and shows tools, approvals, background tasks, logs, and generated files. |
+| CLI / TUI / SDK / RPC | Preserves Pi's native command line, terminal UI, SDK, RPC, session, and extension compatibility. |
+| General background tasks | Starts long commands through `background_task`, recording a task ID, PID, exit code, timestamps, stdout/stderr log, and cancellation state. |
+| Automatic continuation | Uses one `outer_loop` tool to wait for time, file changes, process exit, or managed-task completion, then resumes the same session. |
+| Wake infrastructure | Per-session queues, capability checks, request deduplication, local IPC, cancellation, and JSONL diagnostics. |
+| Light and dark themes | AutoPi Dark uses the `#090D20` brand foundation; AutoPi Light switches to inverse wordmarks and the light icon automatically. |
+| Verifiable delivery | Windows portable desktop, Linux x64 CLI, platform-specific VSIX packages, build manifests, and SHA-256 checksums. |
 
-### 一个“自动继续”的例子
+### An automatic-continuation example
 
-直接告诉 AutoPi：
+Tell AutoPi:
 
 ```text
-运行项目构建；如果还没结束就等待这个进程，结束后检查结果并修复错误。
+Run the project build. If it is still running, wait for it to finish, then inspect the result and fix any errors.
 ```
 
-也可以让它按时间或文件变化继续：
+It can also continue on time or file events:
 
 ```text
-10 分钟后继续检查日志。
-等 output.json 被修改后读取结果并生成报告。
+Check the logs again in 10 minutes.
+Wait until output.json changes, then read the result and generate a report.
 ```
 
-AutoPi 创建等待任务后仍可继续接收其他消息；过时任务可以由你或 Agent 取消。
-
-## 当前边界
-
-- Wake 注册目前随 AutoPi 进程存在；完全退出后不会自动恢复尚未触发的等待任务。
-- 本地 Wake 只面向在线会话，不提供离线队列、跨机器传输或托管调度服务。
-- 文件监控支持受支持的平台；进程等待目前以 Windows 为主，并采用轮询调度。
-- 第三方邮箱、聊天、MCP 等连接器没有捆绑在正式包内，可通过扩展或外部程序接入。
-- AutoPi 不是沙箱。它使用当前用户权限读取文件和运行命令，请只打开可信工作区并审查高风险操作。
-
-## 产品结构
+Or describe a complete workflow in one instruction:
 
 ```text
-AutoPi Desktop       AutoPi CLI / TUI / SDK / RPC
-        \                       /
+After training succeeds, run the test set, analyze the real output, and write a report to reports/eval.md. If any stage fails, stop the remaining stages and explain why.
+```
+
+Computer vision is only an acceptance example. AutoPi does not hard-code a training framework, dataset schema, or report template. Commands, artifacts, and report formats come from the user's instruction and the current repository.
+
+AutoPi can continue receiving messages after registering a wait. Obsolete waits and tasks can be cancelled by either the user or the agent.
+
+## Current boundaries
+
+- Wake registrations live only as long as the corresponding AutoPi process. Pending waits are not automatically resumed after a full restart.
+- Background tasks live with the corresponding AutoPi or VS Code process. Closing the host terminates managed process trees; the next launch shows recovery information without automatically rerunning work.
+- Local Wake targets online sessions only. It is not an offline queue, cross-machine transport, or managed scheduling service.
+- The first Linux release supports glibc x64 only, not Alpine/musl, ARM64, or the Electron desktop application.
+- Third-party email, chat, and MCP connectors are not bundled in release packages; they can be added through extensions or external programs.
+- AutoPi is not a sandbox. It reads files and runs commands with the current user's permissions. Open only trusted workspaces and review high-risk operations.
+
+## Product architecture
+
+```text
+AutoPi Desktop   AutoPi VS Code   AutoPi CLI / TUI / SDK / RPC
+        \              |                    /
                  AgentSession
                        |
                Pi-compatible loop
                        |
-                  WakeRuntime
-          timer · file · process · IPC
+       BackgroundTaskManager + WakeRuntime
+       task · timer · file · process · IPC
 ```
 
-桌面端与命令行并不是两个 Agent：它们共用 `@earendil-works/pi-coding-agent`、模型配置、会话文件、扩展、工具和 Wake 运行时。
+Desktop, VS Code, and the command line are not separate agents. They share `@earendil-works/pi-coding-agent`, model configuration, session files, extensions, tools, and the Wake runtime.
 
-## 从源码运行
+## Run from source
 
-要求 Node.js `22.19+`。Windows：
+Node.js `22.19+` is required. On Windows:
 
 ```powershell
 git clone https://github.com/shoelace66/AutoPi.git
@@ -107,13 +142,13 @@ npm run build:offline
 .\autopi.bat
 ```
 
-启动命令行：
+Start the CLI directly:
 
 ```powershell
 .\autopi.bat --cli
 ```
 
-macOS / Linux 当前以 CLI 为主：
+macOS and Linux currently focus on the CLI:
 
 ```bash
 git clone https://github.com/shoelace66/AutoPi.git
@@ -123,48 +158,62 @@ npm run build:offline
 ./autopi.sh --cli
 ```
 
-普通 `npm run build` 会尝试刷新在线模型目录；在离线或网络受限环境中优先使用 `npm run build:offline`。
+The regular `npm run build` attempts to refresh the online model catalog. Prefer `npm run build:offline` in offline or network-restricted environments.
 
-## 开发与验证
+## Development and verification
 
 ```bash
 npm run check
 npm --workspace @autopi/desktop test
+npm run test:vscode
 ```
 
-创建经过校验的 Windows x64 发布包：
+Build verified release packages:
 
 ```powershell
 npm run package:desktop
+npm run package:cli:linux
+npm run package:vscode:windows
+npm run package:vscode:linux
 ```
 
-输出位于 `.artifacts`：
+Artifacts are written under `.artifacts`:
 
 - `AutoPi-<version>-win-x64/`
 - `AutoPi-<version>-win-x64.zip`
 - `AutoPi-<version>-win-x64.zip.sha256`
+- `cli/AutoPi-0.84.1-linux-x64.tar.gz`
+- `cli/AutoPi-0.84.1-linux-x64.tar.gz.sha256`
+- `vscode/AutoPi-0.84.1-win32-x64.vsix`
+- `vscode/AutoPi-0.84.1-win32-x64.vsix.sha256`
+- `vscode/AutoPi-0.84.1-linux-x64.vsix`
+- `vscode/AutoPi-0.84.1-linux-x64.vsix.sha256`
 
-每次打包都会再次解压 ZIP，并对构建 ID、组件哈希和目录树摘要执行同构建验证。维护者还可运行 `npm run release:desktop`，把同一构建同步到 `D:\PiDesktop`。
+Desktop packaging re-extracts the ZIP and verifies the build ID, component hashes, and directory-tree digest. Maintainers can also run `npm run release:desktop` to synchronize the same build to `D:\PiDesktop`.
 
-## 仓库导航
+## Repository guide
 
-| 路径 | 内容 |
+| Path | Purpose |
 | --- | --- |
-| [`apps/desktop`](apps/desktop) | AutoPi Electron 桌面应用 |
-| [`packages/coding-agent`](packages/coding-agent) | CLI、会话、扩展 API 与 Agent 集成 |
-| [`packages/coding-agent/src/core/wake`](packages/coding-agent/src/core/wake) | Wake 运行时、队列、IPC、能力和日志 |
-| [`packages/coding-agent/src/core/outer-loop`](packages/coding-agent/src/core/outer-loop) | 时间、文件、进程监控与 `outer_loop` 工具 |
-| [`docs/GETTING-STARTED.zh-CN.md`](docs/GETTING-STARTED.zh-CN.md) | 零基础中文教程 |
-| [`docs/AUTOPI-DESKTOP.md`](docs/AUTOPI-DESKTOP.md) | 桌面集成与发布说明 |
-| [`README-OUTER-LOOP.md`](README-OUTER-LOOP.md) | Wake / Outer Loop 行为和接口细节 |
-| [`UPSTREAM.md`](UPSTREAM.md) | 上游基线、继承范围与署名 |
+| [`apps/desktop`](apps/desktop) | AutoPi Electron desktop application |
+| [`apps/vscode`](apps/vscode) | AutoPi VS Code extension, sidebar, and host communication layer |
+| [`packages/coding-agent`](packages/coding-agent) | CLI, sessions, extension API, and agent integration |
+| [`packages/coding-agent/src/core/background-task`](packages/coding-agent/src/core/background-task) | General background commands, logs, state, and process-tree cleanup |
+| [`packages/coding-agent/src/core/wake`](packages/coding-agent/src/core/wake) | Wake runtime, queue, IPC, capabilities, and diagnostics |
+| [`packages/coding-agent/src/core/outer-loop`](packages/coding-agent/src/core/outer-loop) | Time, file, process, task monitors, and the `outer_loop` tool |
+| [`docs/GETTING-STARTED.zh-CN.md`](docs/GETTING-STARTED.zh-CN.md) | Beginner desktop guide in Chinese |
+| [`docs/VSCODE-GETTING-STARTED.zh-CN.md`](docs/VSCODE-GETTING-STARTED.zh-CN.md) | VSIX installation, configuration, and training-to-test example in Chinese |
+| [`docs/LINUX-GETTING-STARTED.en.md`](docs/LINUX-GETTING-STARTED.en.md) | Linux CLI, VSIX, Remote SSH, and WSL guide |
+| [`docs/AUTOPI-DESKTOP.md`](docs/AUTOPI-DESKTOP.md) | Desktop integration and release notes |
+| [`README-OUTER-LOOP.md`](README-OUTER-LOOP.md) | Wake and Outer Loop behavior and interface details |
+| [`UPSTREAM.md`](UPSTREAM.md) | Upstream baseline, inherited scope, and attribution |
 
-## 贡献与安全
+## Contributing and security
 
-提交代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [AGENTS.md](AGENTS.md)。安全问题请按 [SECURITY.md](SECURITY.md) 使用 GitHub 私密安全报告，不要公开披露凭据或可利用细节。
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before submitting changes. Report security issues through GitHub's private security reporting flow as described in [SECURITY.md](SECURITY.md); do not disclose credentials or exploitable details publicly.
 
-## 上游与许可证
+## Upstream and license
 
-AutoPi 保留 Pi 的 Git 历史、包结构、原生 Agent loop、CLI/TUI/SDK/RPC、扩展接口和 MIT 许可证署名。AutoPi 新增的桌面产品、Wake 运行时、Outer Loop 集成与交付工具同样以 MIT License 发布。
+AutoPi preserves Pi's Git history, package structure, native agent loop, CLI/TUI/SDK/RPC interfaces, extension compatibility, and MIT license attribution. AutoPi's desktop product, VS Code extension, Wake runtime, Outer Loop integration, and delivery tooling are also released under the MIT License.
 
-感谢 [Mario Zechner](https://github.com/badlogic) 与 [earendil-works/pi](https://github.com/earendil-works/pi) 的原始工作和所有上游贡献者。详见 [UPSTREAM.md](UPSTREAM.md) 与 [LICENSE](LICENSE)。
+Thanks to [Mario Zechner](https://github.com/badlogic), [earendil-works/pi](https://github.com/earendil-works/pi), and every upstream contributor. See [UPSTREAM.md](UPSTREAM.md) and [LICENSE](LICENSE) for details.

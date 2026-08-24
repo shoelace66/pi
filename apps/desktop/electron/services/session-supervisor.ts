@@ -334,7 +334,7 @@ export class SessionSupervisor {
 			sessionManager: SessionManager.open(sessionFile, undefined, cwd),
 			cwd,
 			wakeRuntime: this.options.wakeRuntime,
-			customTools: this.options.outerLoopRuntime ? [this.options.outerLoopRuntime.createTool(cwd)] : undefined,
+			customTools: this.options.outerLoopRuntime?.createTools(cwd),
 		});
 		this.options.outerLoopRuntime?.bindSession(session);
 		await this.bindDesktopExtensions(session, sessionFile);
@@ -389,7 +389,7 @@ export class SessionSupervisor {
 			cwd,
 			sessionManager: SessionManager.create(cwd),
 			wakeRuntime: this.options.wakeRuntime,
-			customTools: this.options.outerLoopRuntime ? [this.options.outerLoopRuntime.createTool(cwd)] : undefined,
+			customTools: this.options.outerLoopRuntime?.createTools(cwd),
 		});
 		this.options.outerLoopRuntime?.bindSession(session);
 		const file = session.sessionFile;

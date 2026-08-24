@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1710" height="430" viewBox="-36 60 1710 430" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">AutoPi</title>
+  <desc id="desc">AutoPi 冰白单色几何字标</desc>
+  <defs>
+    <linearGradient id="iceMain" x1="20" y1="90" x2="1610" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCFEFF"/>
+      <stop offset=".48" stop-color="#EAF8FC"/>
+      <stop offset="1" stop-color="#D9DDE8"/>
+    </linearGradient>
+    <linearGradient id="iceLoop" x1="1006" y1="190" x2="1196" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FEFF"/>
+      <stop offset=".5" stop-color="#E2F4F8"/>
+      <stop offset="1" stop-color="#DEDCE8"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1 0 -0.0875 1 33.3 0)">
+    <path d="M40 380L186 122C191 96 209 96 214 122L360 380" stroke="url(#iceMain)" stroke-width="40"/>
+    <path d="M88 300H330" stroke="#F4FBFF" stroke-width="36"/>
+    <path d="M340 300H420" stroke="#F4FBFF" stroke-opacity=".3" stroke-width="12"/>
+    <path d="M430 300H446" stroke="#F4FBFF" stroke-opacity=".16" stroke-width="7"/>
+    <path d="M470 190V306A110 82 0 0 0 690 306V190" stroke="url(#iceMain)" stroke-width="40"/>
+    <path d="M858 134V342Q858 384 900 384" stroke="url(#iceMain)" stroke-width="40"/>
+    <path d="M802 214H914" stroke="url(#iceMain)" stroke-width="40"/>
+    <circle cx="1101" cy="285" r="75" pathLength="100" stroke="url(#iceLoop)" stroke-width="40" stroke-dasharray="84 16" transform="rotate(-11 1101 285)"/>
+    <path d="M1288 100V440" stroke="url(#iceMain)" stroke-width="40"/>
+    <path d="M1288 106C1354 92 1446 100 1446 178C1446 248 1370 266 1288 244" stroke="url(#iceMain)" stroke-width="40"/>
+    <path d="M1558 190V380" stroke="url(#iceMain)" stroke-width="40"/>
+    <circle cx="1158" cy="237" r="22" fill="#F4FBFF" fill-opacity=".18" stroke="none"/>
+    <circle cx="1158" cy="237" r="11" fill="#FFFFFF" stroke="none"/>
+    <circle cx="1558" cy="124" r="34" stroke="#F4FBFF" stroke-opacity=".14" stroke-width="2.5"/>
+    <circle cx="1558" cy="124" r="26" fill="#F4FBFF" fill-opacity=".2" stroke="none"/>
+    <circle cx="1558" cy="124" r="12" fill="#FFFFFF" stroke="none"/>
+  </g>
+</svg>

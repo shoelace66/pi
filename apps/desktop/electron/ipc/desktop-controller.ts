@@ -13,10 +13,12 @@ import {
 	type MonitorRegistry,
 	normalizeCreateWakeInput,
 	OuterLoopRuntime,
+	resolveCustomMonitorPolicy,
 	type SessionInfo,
 	SessionManager,
 	type SessionStats,
 	type SessionTreeNode,
+	SettingsManager,
 	WakeRuntime,
 	type WakeStore,
 } from "@earendil-works/pi-coding-agent";
@@ -231,6 +233,10 @@ export class DesktopController {
 			stopWakeRuntime: true,
 			checkIntervalMs: 5_000,
 			journal: wakeJournal,
+			customMonitorPolicy: (root) => {
+				const settingsManager = SettingsManager.create(root, getAgentDir(), { projectTrusted: true });
+				return resolveCustomMonitorPolicy(settingsManager, true);
+			},
 		});
 		this.wakeStore = this.outerLoopRuntime.store;
 		this.monitorRegistry = this.outerLoopRuntime.monitorRegistry;

@@ -9,7 +9,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findPackageDirectories } from "./package-workspaces.mjs";
 
-const GENERATED_PACKAGE_SUFFIXES = [join("coding-agent", "install-lock")];
+const GENERATED_PACKAGE_SUFFIXES = [
+	join("coding-agent", "install-lock"),
+	join("vscode", "resources", "backend"),
+];
 
 const packageRoots = process.argv.length > 2 ? process.argv.slice(2) : ["packages", "apps"];
 const workspacePackages = packageRoots
@@ -38,10 +41,25 @@ if (versions.size > 1) {
 }
 
 console.log("\nAll non-private packages are at the same version (lockstep).");
+const lockstepVersion = versions.values().next().value;
+if (typeof lockstepVersion !== "string") {
+	console.error("\nERROR: No published package version is available for lockstep synchronization.");
+	process.exit(1);
+}
 
 let totalUpdates = 0;
 const updatedPackages = new Set();
 for (const pkg of workspacePackages) {
+	if (typeof pkg.data.autopiCoreVersion === "string") {
+		for (const field of ["version", "autopiCoreVersion"]) {
+			if (pkg.data[field] === lockstepVersion) continue;
+			console.log(`\n${pkg.data.name}:`);
+			console.log(`  ${field}: ${pkg.data[field]} → ${lockstepVersion} (AutoPi lockstep)`);
+			pkg.data[field] = lockstepVersion;
+			updatedPackages.add(pkg);
+			totalUpdates++;
+		}
+	}
 	for (const dependencyType of ["dependencies", "devDependencies"]) {
 		const dependencies = pkg.data[dependencyType];
 		if (!dependencies) {

@@ -215,6 +215,18 @@ export class WakeScheduler {
 				nextCheckAt(job, nowDate.getTime()),
 				now,
 			);
+			const wakeImmediately = Boolean(
+				error &&
+					typeof error === "object" &&
+					"wakeImmediately" in error &&
+					(error as { wakeImmediately?: unknown }).wakeImmediately === true,
+			);
+			if (wakeImmediately) {
+				return (
+					(await this.store.markReady(job.id, { cause: "monitor_error", monitorError, satisfiedAt: now }, now)) ||
+					recorded
+				);
+			}
 			if (timeoutAt <= nowDate.getTime()) {
 				if (job.trigger.timeout.action === "expire") return (await this.store.expire(job.id, now)) || recorded;
 				return (

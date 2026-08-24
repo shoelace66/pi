@@ -8,10 +8,21 @@
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model } from "@earendil-works/pi-ai";
 import type { SessionStats } from "../../core/agent-session.ts";
+import type { BackgroundTask } from "../../core/background-task/types.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
+import type { WakeJob } from "../../core/outer-loop/types.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
+import type { JsonAgentSessionEvent } from "../json-event.ts";
+
+export const RPC_PROTOCOL_VERSION = 1;
+
+export type RpcCapability = "agent" | "extension_ui" | "outer_loop" | "background_tasks" | "automations";
+
+export type RpcAutomation =
+	| { kind: "wake"; id: string; sessionId: string; status: WakeJob["status"]; wake: WakeJob }
+	| { kind: "background_task"; id: string; sessionId: string; status: BackgroundTask["status"]; task: BackgroundTask };
 
 // ============================================================================
 // RPC Commands (stdin)
@@ -68,6 +79,10 @@ export type RpcCommand =
 
 	// Messages
 	| { id?: string; type: "get_messages" }
+
+	// Automation
+	| { id?: string; type: "list_automations"; includeTerminal?: boolean }
+	| { id?: string; type: "cancel_automation"; automationId: string; note?: string }
 
 	// Commands (available for invocation via prompt)
 	| { id?: string; type: "get_commands" };
@@ -218,6 +233,22 @@ export type RpcResponse =
 	// Messages
 	| { id?: string; type: "response"; command: "get_messages"; success: true; data: { messages: AgentMessage[] } }
 
+	// Automation
+	| {
+			id?: string;
+			type: "response";
+			command: "list_automations";
+			success: true;
+			data: { automations: RpcAutomation[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "cancel_automation";
+			success: true;
+			data: { automation: RpcAutomation };
+	  }
+
 	// Commands
 	| {
 			id?: string;
@@ -281,6 +312,21 @@ export type RpcExtensionUIResponse =
 	| { type: "extension_ui_response"; id: string; value: string }
 	| { type: "extension_ui_response"; id: string; confirmed: boolean }
 	| { type: "extension_ui_response"; id: string; cancelled: true };
+
+export type RpcReadyEvent = {
+	type: "rpc_ready";
+	protocolVersion: typeof RPC_PROTOCOL_VERSION;
+	capabilities: RpcCapability[];
+};
+
+export type RpcAgentEvent = { type: "agent_event"; event: JsonAgentSessionEvent };
+
+export type RpcAutomationChangedEvent = {
+	type: "automation_changed";
+	automations: RpcAutomation[];
+};
+
+export type RpcProtocolEvent = RpcReadyEvent | RpcAgentEvent | RpcExtensionUIRequest | RpcAutomationChangedEvent;
 
 // ============================================================================
 // Helper type for extracting command types

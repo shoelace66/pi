@@ -26,11 +26,30 @@ describe("outer-loop v2 intent contract", () => {
 		expect(schema).toContain('"wait_time"');
 		expect(schema).toContain('"wait_file"');
 		expect(schema).toContain('"wait_process"');
+		expect(schema).toContain('"wait_task"');
 		expect(schema).not.toContain('"operator"');
 		expect(schema).not.toContain('"activation"');
 		expect(schema).not.toContain('"note"');
 		expect(tool.promptGuidelines?.join("\n")).toContain("milliseconds");
 		expect(tool.promptGuidelines?.join("\n")).toContain("checkFirst is advisory");
+	});
+
+	it("defaults wait_task to the only supported finished event", () => {
+		const tool = createOuterLoopTool({
+			store: new InMemoryWakeStore(),
+			monitorRegistry: new MonitorRegistry(),
+			allowedRoot: "C:\\workspace",
+		});
+		expect(
+			tool.prepareArguments?.({
+				action: "wait_task",
+				taskId: "task_1",
+				reason: "wait",
+				objective: "continue",
+				checkFirst: [],
+				timeout: { kind: "after", value: "00:01:00", onTimeout: "wake" },
+			}),
+		).toMatchObject({ action: "wait_task", event: "finished" });
 	});
 
 	it("lists objective and normalized due information in the text result", async () => {
@@ -111,5 +130,7 @@ describe("outer-loop v2 intent contract", () => {
 		expect(findUnclosedWakeEvents(await journal.read(), "session")).toEqual([
 			{ resourceId: "wake_open", lastKind: "dispatching", journalPath: undefined },
 		]);
+		await journal.append({ kind: "recovery_notice_delivered", resourceId: "wake_open" });
+		expect(findUnclosedWakeEvents(await journal.read(), "session")).toEqual([]);
 	});
 });

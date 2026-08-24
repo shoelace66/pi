@@ -95,6 +95,47 @@ Set `PI_SKIP_VERSION_CHECK=1` to disable the Pi version update check. Use `--off
 }
 ```
 
+### Custom outer-loop monitors
+
+`outer_loop.wait_custom` is available to trusted projects in interactive CLI and RPC mode. It executes a project JavaScript file in an isolated QuickJS/WASM runtime. The script has no Node.js globals, Wake capability, filesystem API, or direct network API. It can only return bounded, read-only requests for the host to perform.
+
+HTTP access is denied by default. Global settings grant the maximum set of exact origins; project settings can disable custom monitors or narrow that list, but cannot add authority:
+
+```json
+{
+  "customMonitor": {
+    "enabled": true,
+    "allowedOrigins": ["https://status.example.com"]
+  }
+}
+```
+
+The script must define `function monitor(frame)`. `frame` contains `now`, persistent JSON `state`, `lastResult` from the previous host request in the current sample, and `requestIndex`. Return one of:
+
+```js
+function monitor(frame) {
+  if (frame.lastResult === null) {
+    return {
+      type: "request",
+      request: { kind: "file_stat", path: "pipeline/model.bin", includeHash: true },
+      state: frame.state,
+    };
+  }
+  if (frame.lastResult.exists) {
+    return {
+      type: "wake",
+      eventId: `model-${frame.lastResult.sha256}`,
+      message: "A model artifact was reported; verify it before continuing.",
+      data: frame.lastResult,
+      state: frame.state,
+    };
+  }
+  return { type: "continue", message: "Model artifact is not present yet.", state: frame.state };
+}
+```
+
+Read-only request kinds are `file_stat`, `file_read`, `task_status`, `process_status`, and allowlisted HTTP `GET`/`HEAD`. File paths and symlink targets must remain inside the project. Each `wait_custom` call must include a non-empty `checkFirst` list and a waking timeout. A script wake is self-reported: it resumes the model but does not mark the task successful. Script errors, access violations, CPU/memory limits, request limits, and monitor timeouts wake the model with an error so the pipeline cannot remain suspended forever. Custom monitor state is process-local; after a CLI restart the model must register it again.
+
 ### Warnings
 
 | Setting | Type | Default | Description |

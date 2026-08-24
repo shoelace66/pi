@@ -8,6 +8,7 @@ import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
+import type { CustomMonitorPolicy } from "./outer-loop/custom-monitor.ts";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -64,6 +65,13 @@ export interface MarkdownSettings {
 
 export interface WarningSettings {
 	anthropicExtraUsage?: boolean; // default: true
+}
+
+export interface CustomMonitorSettings {
+	/** Trusted projects default to enabled unless the global setting is false. */
+	enabled?: boolean;
+	/** Exact HTTP origins; project settings may only narrow the global list. */
+	allowedOrigins?: string[];
 }
 
 export type DefaultProjectTrust = "ask" | "always" | "never";
@@ -129,6 +137,7 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
 	warnings?: WarningSettings;
+	customMonitor?: CustomMonitorSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
 	httpProxy?: string; // Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for Pi-managed HTTP clients
 	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
@@ -448,6 +457,13 @@ export class SettingsManager {
 
 	getGlobalSettings(): Settings {
 		return structuredClone(this.globalSettings);
+	}
+
+	getCustomMonitorSettings(): { global: CustomMonitorSettings; project: CustomMonitorSettings } {
+		return {
+			global: structuredClone(this.globalSettings.customMonitor ?? {}),
+			project: structuredClone(this.projectSettings.customMonitor ?? {}),
+		};
 	}
 
 	getProjectSettings(): Settings {
@@ -1281,4 +1297,39 @@ export class SettingsManager {
 		this.markModified("warnings");
 		this.save();
 	}
+}
+
+/**
+ * Resolve the host-independent custom monitor authority ceiling.
+ * Project settings may only disable the feature or narrow global HTTP origins.
+ */
+export function resolveCustomMonitorPolicy(
+	settingsManager: Pick<SettingsManager, "getCustomMonitorSettings">,
+	projectTrusted: boolean,
+): CustomMonitorPolicy {
+	const settings = settingsManager.getCustomMonitorSettings();
+	const canonicalOrigins = (values: string[] | undefined): string[] => {
+		const result = new Set<string>();
+		for (const value of values ?? []) {
+			try {
+				const url = new URL(value);
+				if ((url.protocol === "http:" || url.protocol === "https:") && url.origin !== "null") {
+					result.add(url.origin);
+				}
+			} catch {
+				// Invalid settings entries grant no authority.
+			}
+		}
+		return [...result];
+	};
+	const globalOrigins = canonicalOrigins(settings.global.allowedOrigins);
+	const allowedOrigins =
+		settings.project.allowedOrigins === undefined
+			? globalOrigins
+			: canonicalOrigins(settings.project.allowedOrigins).filter((origin) => globalOrigins.includes(origin));
+	return {
+		enabled: projectTrusted && settings.global.enabled !== false && settings.project.enabled !== false,
+		projectTrusted,
+		allowedOrigins,
+	};
 }

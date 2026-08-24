@@ -1,0 +1,15 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"noEmit": true,
+		"types": ["node", "vscode"]
+	},
+	"include": [
+		"src/**/*.ts",
+		"shared/**/*.ts",
+		"test/**/*.ts",
+		"../../packages/coding-agent/src/utils/highlight-js-lib-index.d.ts"
+	]
+}

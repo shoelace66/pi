@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { AgentSession } from "../agent-session.ts";
+import {
+	type BackgroundTask,
+	BackgroundTaskManager,
+	createBackgroundTaskStateAdapter,
+	createBackgroundTaskTool,
+} from "../background-task/index.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { findUnclosedWakeEvents, type WakeJournal } from "../wake/journal.ts";
 import type { WakeRuntime } from "../wake/runtime.ts";
@@ -10,6 +16,7 @@ import { createFileStateAdapter } from "./adapters/file-state.ts";
 import type { ProcessStateAdapter } from "./adapters/process-state.ts";
 import { createProcessStateAdapter } from "./adapters/process-state.ts";
 import { createOuterLoopClockExtension } from "./clock-extension.ts";
+import { CustomMonitorManager, type CustomMonitorPolicy } from "./custom-monitor.ts";
 import { type InMemoryWakeStats, InMemoryWakeStore } from "./in-memory-wake-store.ts";
 import { MonitorRegistry } from "./monitor-registry.ts";
 import { createOuterLoopTool } from "./tool.ts";
@@ -20,9 +27,14 @@ import { WakeScheduler } from "./wake-scheduler.ts";
 export type OuterLoopEvent =
 	| { type: "changed"; stats: InMemoryWakeStats }
 	| { type: "wake_started"; job: WakeJob }
-	| { type: "wake_finished"; job: WakeJob };
+	| { type: "wake_finished"; job: WakeJob }
+	| { type: "task_changed"; task: BackgroundTask };
 
 export type OuterLoopListener = (event: OuterLoopEvent) => void;
+
+function isTerminalTask(task: BackgroundTask): boolean {
+	return task.status === "succeeded" || task.status === "failed" || task.status === "cancelled";
+}
 
 /**
  * Owns the process-local outer loop and connects it to the host's sessions.
@@ -32,9 +44,11 @@ export class OuterLoopRuntime {
 	readonly store: InMemoryWakeStore;
 	readonly monitorRegistry: MonitorRegistry;
 	readonly scheduler: WakeScheduler;
+	readonly taskManager: BackgroundTaskManager;
 	private readonly allowedRoot: string;
 	private readonly fileStateAdapter: FileStateAdapter;
 	private readonly processStateAdapter: ProcessStateAdapter;
+	private readonly customMonitorManager: CustomMonitorManager;
 	private readonly wakeRuntime: WakeRuntime;
 	private readonly stopWakeRuntime: boolean;
 	private readonly registrations = new Map<string, WakeRegistration>();
@@ -52,24 +66,42 @@ export class OuterLoopRuntime {
 		wakeRuntime: WakeRuntime;
 		stopWakeRuntime?: boolean;
 		journal?: WakeJournal;
+		taskManager?: BackgroundTaskManager;
+		customMonitorPolicy?: (root: string) => CustomMonitorPolicy;
 	}) {
 		this.allowedRoot = resolve(options.cwd);
 		this.wakeRuntime = options.wakeRuntime;
 		this.stopWakeRuntime = options.stopWakeRuntime ?? false;
 		this.journal = options.journal ?? options.wakeRuntime.journal;
+		this.taskManager =
+			options.taskManager ?? new BackgroundTaskManager({ allowedRoots: [this.allowedRoot], journal: this.journal });
 		this.store = options.store ?? new InMemoryWakeStore({ journal: this.journal });
 		this.monitorRegistry = new MonitorRegistry();
 		this.fileStateAdapter = createFileStateAdapter({ allowedRoots: [this.allowedRoot] });
 		this.processStateAdapter = createProcessStateAdapter();
+		this.customMonitorManager = new CustomMonitorManager({
+			taskManager: this.taskManager,
+			processStateAdapter: this.processStateAdapter,
+			policyForRoot: options.customMonitorPolicy,
+		});
 		this.monitorRegistry.register(this.fileStateAdapter);
 		this.monitorRegistry.register(this.processStateAdapter);
+		this.monitorRegistry.register(createBackgroundTaskStateAdapter(this.taskManager));
+		this.monitorRegistry.register(this.customMonitorManager);
+		this.taskManager.subscribe((event) => {
+			this.emit({ type: "task_changed", task: event.task });
+			if (isTerminalTask(event.task)) void this.sampleTaskWaiters(event.task).catch(() => undefined);
+		});
 		this.runner = new WakeRunner({
 			store: this.store,
 			workerId: `outer-loop-${randomUUID()}`,
 			allowedSessionRoot: undefined,
 			resolveRegistration: (job) => this.registrationForAttempt(job),
 			onRunStarted: (job) => this.emit({ type: "wake_started", job }),
-			onRunFinished: (job) => this.emit({ type: "wake_finished", job }),
+			onRunFinished: (job) => {
+				this.disposeCustomMonitor(job);
+				this.emit({ type: "wake_finished", job });
+			},
 		});
 		this.scheduler = new WakeScheduler({
 			store: this.store,
@@ -86,13 +118,28 @@ export class OuterLoopRuntime {
 		return createOuterLoopTool({
 			store: this.store,
 			monitorRegistry: this.monitorRegistry,
+			taskManager: this.taskManager,
+			customMonitorManager: this.customMonitorManager,
 			allowedRoot: root,
 			sampleMonitor: (job) => this.scheduler.sampleNow(job),
 			registerWake: (job) => this.registerInitial(job),
-			cancelWake: (wakeId, reason) => this.cancelRegistrations(wakeId, reason ?? "Outer Loop cancelled"),
+			cancelWake: async (wakeId, reason, job) => {
+				if (job) this.disposeCustomMonitor(job);
+				await this.cancelRegistrations(wakeId, reason ?? "Outer Loop cancelled");
+			},
 			requestRun: () => setTimeout(() => void this.scheduler.requestTick(), 0),
 			onChanged: () => this.emitStatsChanged(),
 		});
+	}
+
+	createBackgroundTaskTool(projectRoot = this.allowedRoot): ToolDefinition {
+		const root = resolve(projectRoot);
+		this.taskManager.addAllowedRoot(root);
+		return createBackgroundTaskTool(this.taskManager, root);
+	}
+
+	createTools(projectRoot = this.allowedRoot): ToolDefinition[] {
+		return [this.createTool(projectRoot), this.createBackgroundTaskTool(projectRoot)];
 	}
 
 	createClockExtension(getSessionId: () => string) {
@@ -105,6 +152,7 @@ export class OuterLoopRuntime {
 		journalSeq: number;
 	}> {
 		const result = await this.store.cancelByUser(input.wakeId, input.note);
+		if (result.job) this.disposeCustomMonitor(result.job);
 		await this.cancelRegistrations(input.wakeId, input.note ?? "Cancelled by user");
 		if (result.job && input.note && result.status !== "already_terminal" && result.status !== "not_found") {
 			const job = result.job;
@@ -144,6 +192,8 @@ export class OuterLoopRuntime {
 
 	async stop(): Promise<void> {
 		if (!this.started) {
+			this.customMonitorManager.clear();
+			await this.taskManager.stop();
 			if (this.stopWakeRuntime) await this.wakeRuntime.stop();
 			return;
 		}
@@ -153,14 +203,37 @@ export class OuterLoopRuntime {
 			[...this.registrations.values()].map((registration) => registration.cancel("Outer Loop stopped")),
 		);
 		this.registrations.clear();
+		this.customMonitorManager.clear();
+		await this.taskManager.stop();
 		if (this.stopWakeRuntime) await this.wakeRuntime.stop();
 		this.listeners.clear();
 	}
 
 	bindSession(session: AgentSession): void {
 		this.fileStateAdapter.addAllowedRoot(session.sessionManager.getCwd());
+		this.taskManager.addAllowedRoot(session.sessionManager.getCwd());
 		void this.deliverRecoveryNotice(session);
 		this.emitStatsChanged();
+	}
+
+	private async sampleTaskWaiters(task: BackgroundTask): Promise<void> {
+		const jobs = await this.store.listBySession(task.sessionId, ["armed"]);
+		await Promise.all(
+			jobs
+				.filter(
+					(job) =>
+						job.trigger.type === "monitor" &&
+						job.trigger.adapter === "background_task_state" &&
+						job.trigger.source.taskId === task.id,
+				)
+				.map((job) => this.scheduler.sampleNow(job)),
+		);
+	}
+
+	private disposeCustomMonitor(job: WakeJob): void {
+		if (job.trigger.type !== "monitor" || job.trigger.adapter !== this.customMonitorManager.name) return;
+		const monitorId = job.trigger.source.monitorId;
+		if (typeof monitorId === "string") this.customMonitorManager.dispose(monitorId);
 	}
 
 	private async deliverRecoveryNotice(session: AgentSession): Promise<void> {
@@ -174,8 +247,8 @@ export class OuterLoopRuntime {
 				const key = `${session.sessionManager.getSessionId()}:${notice.resourceId}`;
 				if (this.recoveryNoticesDelivered.has(key)) continue;
 				const content =
-					`Outer Loop recovery notice: wake ${notice.resourceId} was left open after the previous process ended ` +
-					`(${notice.lastKind}). Scheduled wake jobs are not automatically resumed.` +
+					`AutoPi recovery notice: automation ${notice.resourceId} was interrupted when the previous process ended ` +
+					`(${notice.lastKind}). It will not resume automatically; inspect its logs and artifacts before restarting it.` +
 					` Journal: ${notice.journalPath ?? "in-memory"}`;
 				await session.sendCustomMessage(
 					{

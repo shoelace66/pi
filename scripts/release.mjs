@@ -152,7 +152,7 @@ function bumpOrSetVersion(target) {
 		}
 
 		console.log(`Setting explicit version (${target})...`);
-		run(`npm version ${target} --workspaces --no-git-tag-version --no-workspaces-update && node scripts/sync-versions.js && npm install --package-lock-only --ignore-scripts`);
+		run(`npm run version:set -- ${target}`);
 	}
 
 	// npm version can temporarily install the previous workspace versions before
@@ -165,7 +165,8 @@ function bumpOrSetVersion(target) {
 }
 
 function getChangelogs() {
-	return findPackageDirectories()
+	const generatedBackend = join("vscode", "resources", "backend");
+	return [...findPackageDirectories(), ...findPackageDirectories("apps").filter((directory) => !directory.endsWith(generatedBackend))]
 		.map((directory) => join(directory, "CHANGELOG.md"))
 		.filter((path) => existsSync(path));
 }

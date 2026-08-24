@@ -223,3 +223,25 @@ export function killProcessTree(pid: number): void {
 		}
 	}
 }
+
+/**
+ * Kill a Windows process tree and wait for taskkill to finish enumerating its
+ * descendants. Background task shutdown uses this form so the process root
+ * cannot disappear before `/T` has captured the complete tree.
+ */
+export function killProcessTreeSync(pid: number): boolean {
+	if (process.platform !== "win32") {
+		killProcessTree(pid);
+		return true;
+	}
+	try {
+		const result = spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)], {
+			stdio: "ignore",
+			timeout: 10_000,
+			windowsHide: true,
+		});
+		return result.status === 0;
+	} catch {
+		return false;
+	}
+}

@@ -1,0 +1,9 @@
+.vscode/**
+src/**
+shared/**
+webview/**
+test/**
+tsconfig.json
+**/*.ts
+**/*.map
+!resources/backend/**

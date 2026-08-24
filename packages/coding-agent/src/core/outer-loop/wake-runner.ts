@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { SessionManager } from "../session-manager.ts";
 import type { WakeRegistration } from "../wake/types.ts";
-import type { ClaimedWake, WakeFailure, WakeJob, WakeStore } from "./types.ts";
+import type { ClaimedWake, JsonValue, WakeFailure, WakeJob, WakeStore } from "./types.ts";
 
 export type WakeRunnerOptions = {
 	store: WakeStore;
@@ -90,18 +90,35 @@ export class WakeRunner {
 				Math.max(1_000, Math.floor(this.leaseMs / 2)),
 			);
 			const registration = await this.resolveRegistration(job);
+			const evidence = job.triggerRuntime?.evidence;
+			const wakeEvent =
+				job.trigger.type === "monitor" && job.trigger.adapter === "custom_monitor"
+					? evidence?.fields.wakeEvent
+					: undefined;
+			const customWake =
+				wakeEvent && typeof wakeEvent === "object" && !Array.isArray(wakeEvent)
+					? (wakeEvent as Record<string, JsonValue>)
+					: undefined;
+			const customEventId =
+				typeof customWake?.eventId === "string" && customWake.eventId ? customWake.eventId : undefined;
+			const customMessage =
+				typeof customWake?.message === "string" && customWake.message ? customWake.message : undefined;
 			await registration.emit({
-				eventId: `${job.id}:${job.runAttempt}`,
+				eventId: customEventId ? `${job.id}:${customEventId}` : `${job.id}:${job.runAttempt}`,
 				message:
-					job.trigger.type === "time"
+					customMessage ??
+					(job.trigger.type === "time"
 						? `Outer-loop timer ${job.id} is due.`
-						: `Outer-loop monitor ${job.id} is ready (${job.triggerRuntime?.cause ?? "condition"}).`,
+						: `Outer-loop monitor ${job.id} is ready (${job.triggerRuntime?.cause ?? "condition"}).`),
 				data: {
 					wakeId: job.id,
 					trigger: job.trigger,
 					cause: job.triggerRuntime?.cause ?? null,
 					evidence: job.triggerRuntime?.evidence ?? null,
 					monitorError: job.triggerRuntime?.monitorError ?? null,
+					checkFirst: job.checkFirst,
+					selfReported: Boolean(customWake),
+					customData: customWake?.data ?? null,
 				},
 			});
 			const result = await registration.outcome;

@@ -29,9 +29,11 @@ function fakeSession(
 	directory: string,
 	id: string,
 	onMessage?: (envelope: WakeEnvelope) => Promise<void>,
+	agentResult: { stopReason: "stop" | "error"; errorMessage?: string } = { stopReason: "stop" },
 ): FakeSession {
 	const file = join(directory, `${id}.jsonl`);
 	const messages: WakeEnvelope[] = [];
+	const agentMessages: Array<Record<string, unknown>> = [];
 	const session = {
 		sessionFile: file,
 		sessionManager: {
@@ -40,12 +42,19 @@ function fakeSession(
 			getCwd: () => directory,
 		},
 		isStreaming: false,
+		messages: agentMessages,
 		waitForIdle: async () => undefined,
 		sendCustomMessage: async (message: { customType: string; details?: unknown }) => {
 			expect(message.customType).toBe("wake_event");
 			const envelope = message.details as WakeEnvelope;
 			messages.push(envelope);
 			await onMessage?.(envelope);
+			agentMessages.push({
+				role: "assistant",
+				content: [],
+				stopReason: agentResult.stopReason,
+				errorMessage: agentResult.errorMessage,
+			});
 		},
 		dispose: () => undefined,
 	} as unknown as AgentSession;
@@ -81,6 +90,33 @@ afterEach(async () => {
 });
 
 describe("WakeRuntime capabilities", () => {
+	it("does not mark a wake completed when the resumed agent turn ends in an error", async () => {
+		const directory = await makeTempDir();
+		const target = fakeSession(directory, "agent-error", undefined, {
+			stopReason: "error",
+			errorMessage: "429 rate limit exceeded",
+		});
+		const journal = new InMemoryWakeJournal();
+		const runtime = new WakeRuntime({ agentDir: directory, journal });
+		runtimes.push(runtime);
+		const binding = await runtime.bindSession(target.session);
+		const registration = await binding.context.register({
+			requestKey: "agent-error",
+			producer: { id: "test-monitor" },
+			reason: "resume after monitor",
+			objective: "continue pipeline",
+		});
+		await registration.emit({ eventId: "agent-error", message: "resume" });
+		await expect(registration.outcome).resolves.toMatchObject({
+			status: "retryable",
+			error: { code: "WAKE_AGENT_ERROR", retriable: true },
+		});
+		expect((await journal.read()).map((event) => event.kind)).toEqual(
+			expect.arrayContaining(["accepted", "dispatching", "retryable"]),
+		);
+		expect((await journal.read()).map((event) => event.kind)).not.toContain("completed");
+	});
+
 	it("validates, consumes, deduplicates, revokes, expires, and journals capabilities", async () => {
 		const directory = await makeTempDir();
 		const releaseDispatch = deferred<void>();

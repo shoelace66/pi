@@ -72,10 +72,12 @@ describe("AgentSession retry", () => {
 		failCount?: number;
 		maxRetries?: number;
 		delayAssistantMessageEndMs?: number;
+		errorMessage?: string;
 	}) {
 		const failCount = options?.failCount ?? 1;
 		const maxRetries = options?.maxRetries ?? 3;
 		const delayAssistantMessageEndMs = options?.delayAssistantMessageEndMs ?? 0;
+		const errorMessage = options?.errorMessage ?? "overloaded_error";
 		let callCount = 0;
 
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
@@ -89,7 +91,7 @@ describe("AgentSession retry", () => {
 					if (callCount <= failCount) {
 						const msg = createAssistantMessage("", {
 							stopReason: "error",
-							errorMessage: "overloaded_error",
+							errorMessage,
 						});
 						stream.push({ type: "start", partial: msg });
 						stream.push({ type: "error", reason: "error", error: msg });
@@ -146,6 +148,19 @@ describe("AgentSession retry", () => {
 		expect(created.getCallCount()).toBe(2);
 		expect(events).toEqual(["start:1", "end:success=true"]);
 		expect(created.session.isRetrying).toBe(false);
+	});
+
+	it("retries a generic unexpected socket close", async () => {
+		const created = await createSession({
+			failCount: 1,
+			errorMessage:
+				"The socket connection was closed unexpectedly. For more information, pass verbose: true to fetch()",
+		});
+
+		await created.session.prompt("Test");
+
+		expect(created.getCallCount()).toBe(2);
+		expect(created.session.messages.at(-1)).toMatchObject({ role: "assistant", stopReason: "stop" });
 	});
 
 	it("exhausts max retries and emits failure", async () => {

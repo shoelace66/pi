@@ -57,7 +57,7 @@ import {
 	type SessionCwdIssue,
 } from "./core/session-cwd.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
-import { SettingsManager } from "./core/settings-manager.ts";
+import { resolveCustomMonitorPolicy, SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { JsonlWakeJournal } from "./core/wake/journal.ts";
@@ -712,6 +712,7 @@ export async function main(args: string[], options?: MainOptions) {
 			: undefined;
 	const trustPromptMode: AppMode = parsed.help || parsed.listModels !== undefined ? "print" : appMode;
 	const projectTrustByCwd = new Map<string, boolean>();
+	const settingsManagersByCwd = new Map<string, SettingsManager>();
 
 	const resolvedExtensionPaths = resolveCliPaths(cwd, parsed.extensions);
 	const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
@@ -736,6 +737,7 @@ export async function main(args: string[], options?: MainOptions) {
 				parsed.projectTrustOverride ??
 				(!hasTrustRequiringResources || trustStore.get(cwd) === true));
 		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+		settingsManagersByCwd.set(resolvePath(cwd), runtimeSettingsManager);
 		const services = await createAgentSessionServices({
 			cwd,
 			agentDir,
@@ -813,14 +815,15 @@ export async function main(args: string[], options?: MainOptions) {
 		);
 		diagnostics.push(...sessionOptionDiagnostics);
 
-		if (parsed.apiKey) {
+		const runtimeApiKey = parsed.apiKey ?? (appMode === "rpc" ? process.env.AUTOPI_RPC_API_KEY : undefined);
+		if (runtimeApiKey) {
 			if (!sessionOptions.model) {
 				diagnostics.push({
 					type: "error",
 					message: "--api-key requires a model to be specified via --model, --provider/--model, or --models",
 				});
 			} else {
-				await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+				await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, runtimeApiKey);
 			}
 		}
 
@@ -837,7 +840,7 @@ export async function main(args: string[], options?: MainOptions) {
 			noTools: sessionOptions.noTools,
 			customTools: [
 				...(sessionOptions.customTools ?? []),
-				...(outerLoopRuntime && !parsed.noTools ? [outerLoopRuntime.createTool(cwd)] : []),
+				...(outerLoopRuntime && !parsed.noTools ? outerLoopRuntime.createTools(cwd) : []),
 			],
 		});
 		const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
@@ -851,7 +854,7 @@ export async function main(args: string[], options?: MainOptions) {
 			diagnostics,
 		};
 	};
-	if (appMode === "interactive") {
+	if (appMode === "interactive" || appMode === "rpc") {
 		const wakeJournal = new JsonlWakeJournal({ agentDir });
 		wakeRuntime = new WakeRuntime({
 			agentDir,
@@ -871,6 +874,13 @@ export async function main(args: string[], options?: MainOptions) {
 			wakeRuntime,
 			journal: wakeJournal,
 			stopWakeRuntime: true,
+			customMonitorPolicy: (root) => {
+				const normalizedRoot = resolvePath(root);
+				const manager = settingsManagersByCwd.get(normalizedRoot) ?? startupSettingsManager;
+				const trusted =
+					projectTrustByCwd.get(root) ?? projectTrustByCwd.get(normalizedRoot) ?? manager.isProjectTrusted();
+				return resolveCustomMonitorPolicy(manager, trusted);
+			},
 		});
 	}
 	time("createRuntime");
@@ -958,7 +968,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	if (appMode === "rpc") {
 		printTimings();
-		await runRpcMode(runtime);
+		await runRpcMode(runtime, { outerLoopRuntime });
 	} else if (appMode === "interactive") {
 		const interactiveMode = new InteractiveMode(runtime, {
 			outerLoopRuntime,

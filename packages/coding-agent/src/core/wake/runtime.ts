@@ -154,6 +154,19 @@ function safeSource(source: WakeSource | undefined): WakeSource {
 	return { kind: "external", verification: "capability" };
 }
 
+function findAgentTurnFailure(session: AgentSession, messageStartIndex: number): Error | undefined {
+	const assistant = session.messages
+		.slice(messageStartIndex)
+		.reverse()
+		.find((message) => message.role === "assistant");
+	if (!assistant || assistant.role !== "assistant" || assistant.stopReason !== "error") return undefined;
+	const error = new WakeClientError(
+		"WAKE_AGENT_ERROR",
+		assistant.errorMessage?.trim() || "The agent turn triggered by the wake event ended with an error",
+	);
+	return error;
+}
+
 export class WakeRuntime {
 	readonly journal: WakeJournal;
 	private readonly agentDir: string;
@@ -642,6 +655,7 @@ export class WakeRuntime {
 				temporary = true;
 			}
 			await session.waitForIdle();
+			const messageStartIndex = Array.isArray(session.messages) ? session.messages.length : 0;
 			const prompt = composeWakeEventPrompt(envelope);
 			await session.sendCustomMessage(
 				{
@@ -652,6 +666,8 @@ export class WakeRuntime {
 				},
 				{ triggerTurn: true, preflight: true },
 			);
+			const agentFailure = findAgentTurnFailure(session, messageStartIndex);
+			if (agentFailure) throw agentFailure;
 			const outcome: WakeOutcome = { requestId: envelope.requestId, status: "completed" };
 			await this.journal.append({
 				kind: "completed",

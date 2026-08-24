@@ -41,6 +41,9 @@
 			"!**/models.generated.ts",
 			"!**/*.models.ts",
 			"!packages/mom/data/**/*",
+			"!!**/.artifacts",
+			"!!**/.vscode-test",
+			"!!apps/vscode/resources/backend",
 			"!!**/node_modules"
 		]
 	}

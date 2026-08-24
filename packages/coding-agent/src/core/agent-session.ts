@@ -286,6 +286,26 @@ interface ToolDefinitionEntry {
 	sourceInfo: SourceInfo;
 }
 
+type WaitToolBatchBarrier = {
+	waitIndex: number;
+	reached: boolean;
+};
+
+function isOuterLoopWaitCall(part: unknown): boolean {
+	if (!part || typeof part !== "object") return false;
+	const candidate = part as { type?: unknown; name?: unknown; arguments?: unknown };
+	if (candidate.type !== "toolCall" || candidate.name !== "outer_loop") return false;
+	if (!candidate.arguments || typeof candidate.arguments !== "object" || Array.isArray(candidate.arguments))
+		return true;
+	const action = (candidate.arguments as Record<string, unknown>).action;
+	return action !== "list" && action !== "cancel";
+}
+
+function findToolCallIndex(message: AssistantMessage, toolCallId: string): number {
+	if (!Array.isArray(message.content)) return -1;
+	return message.content.findIndex((part) => part.type === "toolCall" && "id" in part && part.id === toolCallId);
+}
+
 function estimateMessagesTokens(messages: AgentMessage[]): number {
 	let tokens = 0;
 	for (const message of messages) {
@@ -372,6 +392,7 @@ export class AgentSession {
 	private _toolDefinitions: Map<string, ToolDefinitionEntry> = new Map();
 	private _toolPromptSnippets: Map<string, string> = new Map();
 	private _toolPromptGuidelines: Map<string, string[]> = new Map();
+	private _waitToolBatchBarriers = new WeakMap<AssistantMessage, WaitToolBatchBarrier>();
 
 	// Base system prompt (without extension appends) - used to apply fresh appends each turn
 	private _baseSystemPrompt = "";
@@ -482,7 +503,17 @@ export class AgentSession {
 	 * happens here instead of in wrappers.
 	 */
 	private _installAgentToolHooks(): void {
-		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+		this.agent.beforeToolCall = async ({ assistantMessage, toolCall, args }) => {
+			const barrier = this._getWaitToolBatchBarrier(assistantMessage);
+			const toolCallIndex = findToolCallIndex(assistantMessage, toolCall.id);
+			if (barrier && toolCallIndex === barrier.waitIndex) barrier.reached = true;
+			if (barrier?.reached && toolCallIndex > barrier.waitIndex) {
+				return {
+					block: true,
+					reason: "Tool execution deferred because outer_loop established a stage boundary in this tool batch.",
+					terminate: true,
+				};
+			}
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
 				return undefined;
@@ -503,7 +534,7 @@ export class AgentSession {
 			}
 		};
 
-		this.agent.afterToolCall = async ({ toolCall, args, result, isError }) => {
+		this.agent.afterToolCall = async ({ assistantMessage, toolCall, args, result, isError }) => {
 			const runner = this._extensionRunner;
 			const hookResult = runner.hasHandlers("tool_result")
 				? await runner.emitToolResult({
@@ -519,22 +550,44 @@ export class AgentSession {
 				: undefined;
 
 			const content = hookResult?.content ?? result.content ?? [];
+			const effectiveIsError = hookResult?.isError ?? isError;
+			const barrier = this._getWaitToolBatchBarrier(assistantMessage);
+			const toolCallIndex = findToolCallIndex(assistantMessage, toolCall.id);
+			const terminate = barrier
+				? toolCallIndex < barrier.waitIndex
+					? true
+					: toolCallIndex === barrier.waitIndex && !effectiveIsError
+						? true
+						: undefined
+				: undefined;
 			// Runs after the extension hook so images injected or replaced by extensions are normalized too.
 			const normalizedContent = await normalizeToolResultImages(content, {
 				autoResizeImages: this.settingsManager.getImageAutoResize(),
 			});
 
-			if (!hookResult && normalizedContent === content) {
+			if (!hookResult && normalizedContent === content && terminate === undefined) {
 				return undefined;
 			}
 
 			return {
 				content: normalizedContent,
 				details: hookResult?.details,
-				isError: hookResult?.isError ?? isError,
+				isError: effectiveIsError,
 				usage: hookResult?.usage,
+				terminate,
 			};
 		};
+	}
+
+	private _getWaitToolBatchBarrier(message: AssistantMessage): WaitToolBatchBarrier | undefined {
+		const existing = this._waitToolBatchBarriers.get(message);
+		if (existing) return existing;
+		if (!Array.isArray(message.content)) return undefined;
+		const waitIndex = message.content.findIndex(isOuterLoopWaitCall);
+		if (waitIndex < 0) return undefined;
+		const barrier = { waitIndex, reached: false };
+		this._waitToolBatchBarriers.set(message, barrier);
+		return barrier;
 	}
 
 	private _installAgentNextTurnRefresh(): void {
@@ -2694,7 +2747,14 @@ export class AgentSession {
 	private _isRetryableError(message: AssistantMessage): boolean {
 		// Context overflow is handled by compaction, not retry.
 		if (isContextOverflow(message, this.model?.contextWindow ?? 0)) return false;
-		return isRetryableAssistantError(message);
+		if (isRetryableAssistantError(message)) return true;
+		// Keep transport recovery at the coding-agent boundary so a provider SDK's
+		// wording cannot silently bypass the CLI retry policy. These are generic,
+		// transient connection failures; authentication and model errors remain
+		// non-retryable.
+		return /(?:socket (?:connection )?(?:was )?closed unexpectedly|socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|connection reset by peer)/i.test(
+			message.errorMessage ?? "",
+		);
 	}
 
 	/**

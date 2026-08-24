@@ -50,7 +50,7 @@ export class InMemoryWakeJournal implements WakeJournal {
 	}
 }
 
-const CLOSED_KINDS = new Set<WakeJournalKind>(["completed", "cancelled", "rejected"]);
+const CLOSED_KINDS = new Set<WakeJournalKind>(["completed", "cancelled", "rejected", "recovery_notice_delivered"]);
 
 export type WakeRecoveryNotice = {
 	resourceId: string;

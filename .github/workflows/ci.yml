@@ -39,3 +39,128 @@ jobs:
 
       - name: Test
         run: npm test
+
+  linux-packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install package tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends unzip xvfb
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Test VS Code extension
+        run: npm run test:vscode
+
+      - name: Hydrate offline model data
+        run: npm run hydrate:model-data
+
+      - name: Build Linux release inputs
+        run: |
+          npm run build:offline
+          node scripts/build-vscode.mjs
+
+      - name: Package Linux CLI and VSIX
+        run: |
+          npm run package:cli:linux -- --skip-build
+          npm run package:vscode:linux -- --skip-build
+
+      - name: Verify checksums and platform contents
+        run: |
+          VERSION="$(node -p "require('./packages/coding-agent/package.json').version")"
+          test "$(node -p "require('./apps/vscode/package.json').version")" = "${VERSION}"
+          cd .artifacts/cli
+          sha256sum -c "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+          cd ../vscode
+          sha256sum -c "AutoPi-${VERSION}-linux-x64.vsix.sha256"
+          ! unzip -Z1 "AutoPi-${VERSION}-linux-x64.vsix" | grep -E '\.exe$|clipboard-win32|resources/backend/native/win32'
+
+      - name: Run VS Code integration smoke
+        run: |
+          VERSION="$(node -p "require('./apps/vscode/package.json').version")"
+          xvfb-run -a npm run test:vscode:integration -- --vsix ".artifacts/vscode/AutoPi-${VERSION}-linux-x64.vsix"
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: autopi-linux-x64
+          path: |
+            .artifacts/cli/AutoPi-*-linux-x64.tar.gz
+            .artifacts/cli/AutoPi-*-linux-x64.tar.gz.sha256
+            .artifacts/vscode/AutoPi-*-linux-x64.vsix
+            .artifacts/vscode/AutoPi-*-linux-x64.vsix.sha256
+          if-no-files-found: error
+
+  linux-cli-smoke:
+    needs: linux-packages
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu:22.04, ubuntu:24.04, debian:12]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      - name: Download Linux packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: autopi-linux-x64
+          path: artifacts
+
+      - name: Smoke test CLI entry points
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(artifacts/cli/AutoPi-*-linux-x64.tar.gz)
+          test "${#archives[@]}" -eq 1
+          mkdir product
+          tar -xzf "${archives[0]}" -C product
+          product/autopi --version
+          product/pi --version
+          product/pi-wake --help
+          test -f product/BUILD-MANIFEST.json
+          test -f product/node_modules/@mariozechner/clipboard/clipboard.linux-x64-gnu.node
+
+  windows-vsix-regression:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Hydrate offline model data
+        run: npm run hydrate:model-data
+
+      - name: Build and package Windows VSIX
+        run: npm run package:vscode:windows
+
+      - name: Run installed Windows VSIX integration smoke
+        shell: pwsh
+        run: |
+          $version = node -p "require('./apps/vscode/package.json').version"
+          npm run test:vscode:integration -- --vsix ".artifacts/vscode/AutoPi-$version-win32-x64.vsix"
+
+      - name: Upload Windows VSIX
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: autopi-vscode-win32-x64
+          path: |
+            .artifacts/vscode/AutoPi-*-win32-x64.vsix
+            .artifacts/vscode/AutoPi-*-win32-x64.vsix.sha256
+          if-no-files-found: error

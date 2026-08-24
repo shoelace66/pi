@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const syncVersionsScript = fileURLToPath(new URL("./sync-versions.js", import.meta.url));
+const rootManifestPath = fileURLToPath(new URL("../package.json", import.meta.url));
+const releaseScriptPath = fileURLToPath(new URL("./release.mjs", import.meta.url));
+const setVersionScriptPath = fileURLToPath(new URL("./set-version.mjs", import.meta.url));
 
 async function writeManifest(root, relativeDirectory, manifest) {
 	const directory = join(root, relativeDirectory);
@@ -19,7 +22,7 @@ async function readManifest(root, relativeDirectory) {
 }
 
 function runSyncVersions(root) {
-	return spawnSync(process.execPath, [syncVersionsScript, join(root, "packages")], {
+	return spawnSync(process.execPath, [syncVersionsScript, join(root, "packages"), join(root, "apps")], {
 		cwd: root,
 		encoding: "utf8",
 	});
@@ -53,6 +56,16 @@ test("synchronizes private dependencies without touching registry aliases, gener
 				"@earendil-works/pi-coding-agent": "^1.0.0",
 			},
 		});
+		await writeManifest(root, "apps/vscode", {
+			name: "autopi",
+			version: "0.1.0",
+			private: true,
+			autopiCoreVersion: "1.0.0",
+		});
+		await writeManifest(root, "apps/vscode/resources/backend", {
+			name: "@earendil-works/pi-coding-agent",
+			version: "1.0.0",
+		});
 
 		const result = runSyncVersions(root);
 		assert.equal(result.status, 0, result.stderr);
@@ -62,6 +75,11 @@ test("synchronizes private dependencies without touching registry aliases, gener
 		assert.equal(evalsManifest.dependencies["@mariozechner/pi-ai"], "npm:@earendil-works/pi-ai@1.0.0");
 		const generatedManifest = await readManifest(root, "packages/coding-agent/install-lock");
 		assert.equal(generatedManifest.dependencies["@earendil-works/pi-coding-agent"], "^1.0.0");
+		const vscodeManifest = await readManifest(root, "apps/vscode");
+		assert.equal(vscodeManifest.version, "2.0.0");
+		assert.equal(vscodeManifest.autopiCoreVersion, "2.0.0");
+		const generatedBackendManifest = await readManifest(root, "apps/vscode/resources/backend");
+		assert.equal(generatedBackendManifest.version, "1.0.0");
 
 		await writeManifest(root, "packages/ai", {
 			name: "@earendil-works/pi-ai",
@@ -72,4 +90,21 @@ test("synchronizes private dependencies without touching registry aliases, gener
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test("workspace version scripts include the private repository root", async () => {
+	const rootManifest = JSON.parse(await readFile(rootManifestPath, "utf8"));
+	for (const scriptName of ["version:patch", "version:minor", "version:major"]) {
+		assert.match(rootManifest.scripts[scriptName], /(?:^|\s)--include-workspace-root(?:\s|$)/);
+	}
+	assert.equal(rootManifest.scripts["version:set"], "node scripts/set-version.mjs");
+});
+
+test("the explicit release path includes the repository root and application changelogs", async () => {
+	const releaseScript = await readFile(releaseScriptPath, "utf8");
+	const setVersionScript = await readFile(setVersionScriptPath, "utf8");
+	assert.match(releaseScript, /npm run version:set -- \$\{target\}/);
+	assert.match(setVersionScript, /"--include-workspace-root"/);
+	assert.match(setVersionScript, /scripts\/sync-versions\.js/);
+	assert.match(releaseScript, /findPackageDirectories\("apps"\)/);
 });

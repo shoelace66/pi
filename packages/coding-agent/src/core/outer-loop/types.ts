@@ -19,7 +19,11 @@ export type WakeCause = "time_due" | "monitor_match" | "monitor_timeout" | "moni
 /** The stable, intent-level monitor vocabulary exposed by outer_loop. */
 export type FileWakeEvent = "exists" | "missing" | "modified" | "content_changed";
 
-export type MonitorIntent = { kind: "file"; event: FileWakeEvent } | { kind: "process"; event: "exited" };
+export type MonitorIntent =
+	| { kind: "file"; event: FileWakeEvent }
+	| { kind: "process"; event: "exited" }
+	| { kind: "task"; event: "finished" }
+	| { kind: "custom"; event: "wake_requested" };
 
 export type WakeObjective = {
 	reason: string;

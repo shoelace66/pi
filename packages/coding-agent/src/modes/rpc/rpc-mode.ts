@@ -19,6 +19,8 @@ import type {
 	ExtensionWidgetOptions,
 	WorkingIndicatorOptions,
 } from "../../core/extensions/index.ts";
+import type { OuterLoopRuntime } from "../../core/outer-loop/runtime.ts";
+import type { WakeStatus } from "../../core/outer-loop/types.ts";
 import {
 	flushRawStdout,
 	takeOverStdout,
@@ -30,19 +32,24 @@ import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
 import type {
+	RpcAutomation,
 	RpcCommand,
 	RpcExtensionUIRequest,
 	RpcExtensionUIResponse,
+	RpcProtocolEvent,
 	RpcResponse,
 	RpcSessionState,
 	RpcSlashCommand,
 } from "./rpc-types.ts";
+import { RPC_PROTOCOL_VERSION } from "./rpc-types.ts";
 
 // Re-export types for consumers
 export type {
+	RpcAutomation,
 	RpcCommand,
 	RpcExtensionUIRequest,
 	RpcExtensionUIResponse,
+	RpcProtocolEvent,
 	RpcResponse,
 	RpcSessionState,
 } from "./rpc-types.ts";
@@ -51,14 +58,53 @@ export type {
  * Run in RPC mode.
  * Listens for JSON commands on stdin, outputs events and responses on stdout.
  */
-export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
+export type RpcModeOptions = { outerLoopRuntime?: OuterLoopRuntime };
+
+export async function runRpcMode(runtimeHost: AgentSessionRuntime, options: RpcModeOptions = {}): Promise<never> {
 	takeOverStdout();
 	let session = runtimeHost.session;
 	let unsubscribe: (() => void) | undefined;
 	let unsubscribeBackpressure: (() => void) | undefined;
+	let unsubscribeAutomation: (() => void) | undefined;
 
-	const output = (obj: RpcResponse | RpcExtensionUIRequest | object) => {
+	const output = (obj: RpcResponse | RpcProtocolEvent | object) => {
 		writeRawStdout(serializeJsonLine(obj));
+	};
+
+	const activeWakeStatuses: WakeStatus[] = [
+		"armed",
+		"ready",
+		"running",
+		"run_retry_wait",
+		"blocked",
+		"cancel_requested",
+	];
+
+	const listAutomations = async (includeTerminal = false): Promise<RpcAutomation[]> => {
+		const outerLoop = options.outerLoopRuntime;
+		if (!outerLoop) return [];
+		const sessionId = session.sessionManager.getSessionId();
+		const wakes = await outerLoop.store.listBySession(sessionId, includeTerminal ? undefined : activeWakeStatuses);
+		const tasks = outerLoop.taskManager.list(sessionId, includeTerminal);
+		return [
+			...wakes.map((wake): RpcAutomation => ({ kind: "wake", id: wake.id, sessionId, status: wake.status, wake })),
+			...tasks.map(
+				(task): RpcAutomation => ({
+					kind: "background_task",
+					id: task.id,
+					sessionId,
+					status: task.status,
+					task,
+				}),
+			),
+		];
+	};
+
+	let automationOutput = Promise.resolve();
+	const emitAutomations = (): void => {
+		automationOutput = automationOutput
+			.then(async () => output({ type: "automation_changed", automations: await listAutomations() }))
+			.catch(() => undefined);
 	};
 
 	const success = <T extends RpcCommand["type"]>(
@@ -79,7 +125,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 	// Pending extension UI requests waiting for response
 	const pendingExtensionRequests = new Map<
 		string,
-		{ resolve: (value: any) => void; reject: (error: Error) => void }
+		{ resolve: (value: RpcExtensionUIResponse) => void; reject: (error: Error) => void }
 	>();
 
 	// Shutdown request flag
@@ -315,7 +361,10 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 	});
 
 	const rebindSession = async (): Promise<void> => {
+		const previousSession = session;
 		session = runtimeHost.session;
+		if (previousSession !== session) options.outerLoopRuntime?.unbindSession(previousSession.sessionFile);
+		options.outerLoopRuntime?.bindSession(session);
 		await session.bindExtensions({
 			uiContext: createExtensionUIContext(),
 			mode: "rpc",
@@ -353,7 +402,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		unsubscribe?.();
 		unsubscribeBackpressure?.();
 		unsubscribe = session.subscribe((event) => {
-			output(toJsonEvent(event));
+			output({ type: "agent_event", event: toJsonEvent(event) });
 			if (event.type === "agent_settled") {
 				void checkShutdownRequested();
 			}
@@ -361,6 +410,8 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		unsubscribeBackpressure = session.agent.subscribe(async () => {
 			await waitForRawStdoutBackpressure();
 		});
+		unsubscribeAutomation?.();
+		unsubscribeAutomation = options.outerLoopRuntime?.subscribe(() => emitAutomations());
 	};
 
 	const registerSignalHandlers = (): void => {
@@ -671,6 +722,44 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "get_messages", { messages: session.messages });
 			}
 
+			case "list_automations": {
+				return success(id, "list_automations", { automations: await listAutomations(command.includeTerminal) });
+			}
+
+			case "cancel_automation": {
+				const outerLoop = options.outerLoopRuntime;
+				if (!outerLoop) return error(id, "cancel_automation", "Automation runtime is unavailable");
+				const sessionId = session.sessionManager.getSessionId();
+				const task = outerLoop.taskManager.get(command.automationId);
+				if (task?.sessionId === sessionId) {
+					const cancelled = await outerLoop.taskManager.cancel(task.id, sessionId);
+					const automation: RpcAutomation = {
+						kind: "background_task",
+						id: cancelled.id,
+						sessionId,
+						status: cancelled.status,
+						task: cancelled,
+					};
+					return success(id, "cancel_automation", { automation });
+				}
+				const jobs = await outerLoop.store.listBySession(sessionId);
+				const wake = jobs.find((candidate) => candidate.id === command.automationId);
+				if (!wake) return error(id, "cancel_automation", `Automation not found: ${command.automationId}`);
+				await outerLoop.cancelByUser({ wakeId: wake.id, note: command.note });
+				const updated = (await outerLoop.store.listBySession(sessionId)).find(
+					(candidate) => candidate.id === wake.id,
+				);
+				if (!updated) return error(id, "cancel_automation", `Automation not found after cancellation: ${wake.id}`);
+				const automation: RpcAutomation = {
+					kind: "wake",
+					id: updated.id,
+					sessionId,
+					status: updated.status,
+					wake: updated,
+				};
+				return success(id, "cancel_automation", { automation });
+			}
+
 			// =================================================================
 			// Commands (available for invocation via prompt)
 			// =================================================================
@@ -731,6 +820,8 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		}
 		unsubscribe?.();
 		unsubscribeBackpressure?.();
+		unsubscribeAutomation?.();
+		await options.outerLoopRuntime?.stop();
 		await runtimeHost.dispose();
 		detachInput();
 		process.stdin.pause();
@@ -811,6 +902,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			process.stdin.off("end", onInputEnd);
 		};
 	})();
+	output({
+		type: "rpc_ready",
+		protocolVersion: RPC_PROTOCOL_VERSION,
+		capabilities: ["agent", "extension_ui", "outer_loop", "background_tasks", "automations"],
+	});
 
 	// Keep process alive forever
 	return new Promise(() => {});

@@ -1,0 +1,140 @@
+{
+	"name": "autopi",
+	"displayName": "AutoPi",
+	"description": "Autonomous coding workflows in a secure VS Code sidebar",
+	"version": "0.84.1",
+	"publisher": "shoelace66",
+	"license": "MIT",
+	"private": true,
+	"homepage": "https://github.com/shoelace66/AutoPi#readme",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/shoelace66/AutoPi.git",
+		"directory": "apps/vscode"
+	},
+	"bugs": {
+		"url": "https://github.com/shoelace66/AutoPi/issues"
+	},
+	"qna": "https://github.com/shoelace66/AutoPi/discussions",
+	"galleryBanner": {
+		"color": "#090D20",
+		"theme": "dark"
+	},
+	"engines": {
+		"vscode": "^1.134.0"
+	},
+	"categories": ["Machine Learning", "Other"],
+	"keywords": ["agent", "automation", "autonomous", "coding", "AutoPi"],
+	"icon": "media/extension-icon.png",
+	"main": "dist/extension.js",
+	"autopiCoreVersion": "0.84.1",
+	"activationEvents": ["onView:autopi.sidebar"],
+	"extensionKind": ["workspace"],
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": "limited",
+			"description": "Untrusted workspaces are view-only. Trust the workspace before AutoPi can run commands."
+		}
+	},
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "autopi",
+					"title": "AutoPi",
+					"icon": "media/activity.svg"
+				}
+			]
+		},
+		"views": {
+			"autopi": [
+				{
+					"type": "webview",
+					"id": "autopi.sidebar",
+					"name": "AutoPi"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "autopi.focus",
+				"title": "AutoPi: 打开侧边栏"
+			},
+			{
+				"command": "autopi.newSession",
+				"title": "AutoPi: 新建会话",
+				"icon": "$(add)"
+			},
+			{
+				"command": "autopi.configureApiKey",
+				"title": "AutoPi: 配置 API 密钥"
+			},
+			{
+				"command": "autopi.refresh",
+				"title": "AutoPi: 刷新",
+				"icon": "$(refresh)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "autopi.newSession",
+					"when": "view == autopi.sidebar",
+					"group": "navigation@1"
+				},
+				{
+					"command": "autopi.refresh",
+					"when": "view == autopi.sidebar",
+					"group": "navigation@2"
+				}
+			]
+		},
+		"configuration": {
+			"title": "AutoPi",
+			"properties": {
+				"autopi.provider": {
+					"type": "string",
+					"default": "",
+					"description": "模型提供商。留空时使用 AutoPi 默认配置。"
+				},
+				"autopi.model": {
+					"type": "string",
+					"default": "",
+					"description": "模型 ID。留空时使用 AutoPi 默认配置。"
+				},
+				"autopi.backendPath": {
+					"type": "string",
+					"default": "",
+					"scope": "machine",
+					"description": "开发用后端路径。正式 VSIX 默认使用与扩展目标平台匹配的内置 AutoPi 后端。"
+				},
+				"autopi.backendArgs": {
+					"type": "array",
+					"items": { "type": "string" },
+					"default": [],
+					"scope": "machine",
+					"description": "传递给 AutoPi 后端的附加参数。"
+				}
+			}
+		}
+	},
+	"scripts": {
+		"clean": "shx rm -rf dist resources/backend/*",
+		"build": "node ../../scripts/build-vscode.mjs",
+		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p webview/tsconfig.json --noEmit",
+		"test": "vitest --run --configLoader runner",
+		"test:integration": "node ../../scripts/run-vscode-integration.mjs",
+		"package": "node ../../scripts/package-vscode.mjs",
+		"package:linux": "node ../../scripts/package-vscode.mjs --target linux-x64",
+		"package:windows": "node ../../scripts/package-vscode.mjs --target win32-x64"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.19",
+		"@types/vscode": "1.134.0",
+		"@vscode/vsce": "3.9.2",
+		"esbuild": "0.28.1",
+		"shx": "0.4.0",
+		"typescript": "5.9.3",
+		"vitest": "4.1.9"
+	}
+}

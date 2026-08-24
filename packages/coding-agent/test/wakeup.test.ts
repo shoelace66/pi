@@ -29,6 +29,20 @@ function sessionInput(
 	};
 }
 
+async function waitForWakeStatus(
+	runtime: OuterLoopRuntime,
+	wakeId: string,
+	status: WakeJob["status"],
+): Promise<WakeJob> {
+	const deadline = Date.now() + 5_000;
+	while (Date.now() < deadline) {
+		const job = (await runtime.store.listBySession("session-1")).find((candidate) => candidate.id === wakeId);
+		if (job?.status === status) return job;
+		await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+	}
+	throw new Error(`Timed out waiting for Wake Job ${wakeId} to become ${status}`);
+}
+
 afterEach(async () => {
 	await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -79,6 +93,7 @@ describe("outer-loop core", () => {
 		expect(schema).toContain('"wait_time"');
 		expect(schema).toContain('"wait_file"');
 		expect(schema).toContain('"wait_process"');
+		expect(schema).toContain('"wait_task"');
 		expect(schema).not.toContain('"operator"');
 		expect(schema).not.toContain('"activation"');
 		expect(schema).not.toContain('"note"');
@@ -128,6 +143,190 @@ describe("outer-loop core", () => {
 		);
 		expect((result.content[0] as { type: "text"; text: string }).text).toMatch(/dueAt=/);
 		expect((result.details as { job: WakeJob }).job.objective).toBe("继续构建");
+	});
+
+	it("binds wait_task to an owned background task with an explicit timeout", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "pi-wait-task-test-"));
+		tempDirs.push(dir);
+		const runtime = new OuterLoopRuntime({ cwd: dir, wakeRuntime: new WakeRuntime({ agentDir: dir }) });
+		const task = await runtime.taskManager.start({
+			sessionId: "session-1",
+			command: 'node -e "setInterval(() => {}, 1000)"',
+			cwd: dir,
+		});
+		const tool = createOuterLoopTool({
+			store: runtime.store,
+			monitorRegistry: runtime.monitorRegistry,
+			taskManager: runtime.taskManager,
+			allowedRoot: dir,
+			sampleMonitor: (job) => runtime.scheduler.sampleNow(job),
+		});
+		const result = await tool.execute!(
+			"call-task",
+			{
+				action: "wait_task",
+				reason: "等待训练结束",
+				objective: "运行测试并生成报告",
+				checkFirst: ["检查退出码", "读取日志", "检查已有报告"],
+				taskId: task.id,
+				event: "finished",
+				timeout: { kind: "after", value: "00:01:00", onTimeout: "wake" },
+				pollInterval: "00:00:30",
+			},
+			undefined,
+			undefined,
+			{
+				cwd: dir,
+				sessionManager: { getSessionFile: () => join(dir, "session.jsonl"), getSessionId: () => "session-1" },
+			} as never,
+		);
+		const job = (result.details as { job: WakeJob }).job;
+		expect(job.trigger).toMatchObject({
+			type: "monitor",
+			adapter: "background_task_state",
+			source: { taskId: task.id },
+			intent: { kind: "task", event: "finished" },
+			timeout: { action: "wake" },
+		});
+		expect(job.checkFirst).toEqual(["检查退出码", "读取日志", "检查已有报告"]);
+		await runtime.stop();
+	});
+
+	it("matches task intent for every terminal status and not while running", () => {
+		const baseJob = {
+			...sessionInput({
+				type: "monitor",
+				adapter: "background_task_state",
+				source: { taskId: "task-1" },
+				condition: {
+					field: "finished",
+					operator: "eq",
+					expected: true,
+					activation: "level",
+					consecutiveMatches: 1,
+				},
+				intent: { kind: "task", event: "finished" },
+				delivery: { mode: "poll", intervalMs: 30_000 },
+				timeout: { at: new Date(Date.now() + 300_000).toISOString(), action: "wake" },
+			}),
+			status: "armed",
+			triggerRuntime: { checkCount: 0, failureCount: 0, baselineObserved: false, consecutiveMatches: 0 },
+		} as WakeJob;
+		for (const status of ["succeeded", "failed", "cancelled"] as const) {
+			const observation = {
+				observedAt: new Date().toISOString(),
+				fields: { status, finished: true },
+				summary: status,
+			};
+			expect(evaluateMonitorCondition(baseJob, observation)).toMatchObject({ rawMatched: true, matched: true });
+			expect(
+				evaluateMonitorCondition(
+					{ ...baseJob, triggerRuntime: { ...baseJob.triggerRuntime!, checkCount: 1 } },
+					observation,
+				),
+			).toMatchObject({ rawMatched: true, matched: true });
+		}
+		expect(
+			evaluateMonitorCondition(baseJob, {
+				observedAt: new Date().toISOString(),
+				fields: { status: "running", finished: false },
+				summary: "running",
+			}),
+		).toMatchObject({ rawMatched: false, matched: false });
+	});
+
+	it("samples wait_task immediately for success, failure, and cancellation", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "pi-wait-task-event-test-"));
+		tempDirs.push(dir);
+		const runtime = new OuterLoopRuntime({ cwd: dir, wakeRuntime: new WakeRuntime({ agentDir: dir }) });
+		try {
+			const tool = createOuterLoopTool({
+				store: runtime.store,
+				monitorRegistry: runtime.monitorRegistry,
+				taskManager: runtime.taskManager,
+				allowedRoot: dir,
+				sampleMonitor: (job) => runtime.scheduler.sampleNow(job),
+			});
+			for (const scenario of [
+				{ status: "succeeded" as const, command: 'node -e "setTimeout(() => process.exit(0), 250)"' },
+				{ status: "failed" as const, command: 'node -e "setTimeout(() => process.exit(7), 250)"' },
+				{ status: "cancelled" as const, command: 'node -e "setInterval(() => {}, 1000)"', cancel: true },
+			]) {
+				const task = await runtime.taskManager.start({
+					sessionId: "session-1",
+					command: scenario.command,
+					cwd: dir,
+				});
+				const result = await tool.execute!(
+					`call-task-event-${scenario.status}`,
+					{
+						action: "wait_task",
+						reason: "等待任务完成",
+						objective: "检查结果",
+						taskId: task.id,
+						event: "finished",
+						timeout: { kind: "after", value: "00:01:00", onTimeout: "wake" },
+						pollInterval: "24:00:00",
+					},
+					undefined,
+					undefined,
+					{
+						cwd: dir,
+						sessionManager: {
+							getSessionFile: () => join(dir, "session.jsonl"),
+							getSessionId: () => "session-1",
+						},
+					} as never,
+				);
+				const armed = (result.details as { job: WakeJob }).job;
+				expect(armed.status).toBe("armed");
+				if (scenario.cancel) await runtime.taskManager.cancel(task.id, "session-1");
+				const ready = await waitForWakeStatus(runtime, armed.id, "ready");
+				expect(ready.triggerRuntime).toMatchObject({
+					cause: "monitor_match",
+					evidence: { fields: { status: scenario.status, finished: true } },
+				});
+			}
+		} finally {
+			await runtime.stop();
+		}
+	});
+
+	it("expires an unfinished monitor exactly at its timeout", async () => {
+		const store = new InMemoryWakeStore();
+		const monitorRegistry = new MonitorRegistry();
+		monitorRegistry.register({
+			name: "unfinished",
+			observe: async () => ({
+				observedAt: new Date().toISOString(),
+				fields: { finished: false },
+				summary: "unfinished",
+			}),
+		});
+		const timeout = new Date(Date.now() + 60_001);
+		const created = await store.createOnce({
+			...sessionInput({
+				type: "monitor",
+				adapter: "unfinished",
+				source: {},
+				condition: {
+					field: "finished",
+					operator: "eq",
+					expected: true,
+					activation: "level",
+					consecutiveMatches: 1,
+				},
+				delivery: { mode: "poll", intervalMs: 30_000 },
+				timeout: { at: timeout.toISOString(), action: "expire" },
+			}),
+		});
+		const scheduler = new WakeScheduler({
+			store,
+			monitorRegistry,
+			runner: { run: async () => false } as never,
+		});
+		await scheduler.tick(new Date(timeout.getTime() + 1));
+		expect((await store.listBySession("session-1")).find((job) => job.id === created.job.id)?.status).toBe("expired");
 	});
 
 	it("prepares duration units as milliseconds and rejects invalid ranges", () => {

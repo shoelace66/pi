@@ -24,6 +24,21 @@ export {
 	type SessionStats,
 } from "./core/agent-session.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";
+export type {
+	BackgroundTask,
+	BackgroundTaskEvent,
+	BackgroundTaskInput,
+	BackgroundTaskListener,
+	BackgroundTaskManagerOptions,
+	BackgroundTaskStatus,
+	StartBackgroundTaskInput,
+} from "./core/background-task/index.ts";
+export {
+	BackgroundTaskManager,
+	BackgroundTaskStateAdapter,
+	createBackgroundTaskStateAdapter,
+	createBackgroundTaskTool,
+} from "./core/background-task/index.ts";
 // Compaction
 export {
 	type BranchPreparation,
@@ -310,6 +325,7 @@ export {
 	type ImageSettings,
 	type PackageSource,
 	type RetrySettings,
+	resolveCustomMonitorPolicy,
 	SettingsManager,
 	type SettingsManagerCreateOptions,
 	type TuiMode,
@@ -423,12 +439,20 @@ export {
 	type JsonAgentSessionEvent,
 	type ModelInfo,
 	type PrintModeOptions,
+	type RpcAgentEvent,
+	type RpcAutomation,
+	type RpcAutomationChangedEvent,
+	type RpcCapability,
 	RpcClient,
 	type RpcClientOptions,
 	type RpcCommand,
 	type RpcEventListener,
 	type RpcExtensionUIRequest,
 	type RpcExtensionUIResponse,
+	type RpcModeOptions,
+	type RpcProtocolEvent,
+	type RpcProtocolEventListener,
+	type RpcReadyEvent,
 	type RpcResponse,
 	type RpcSessionState,
 	runPrintMode,

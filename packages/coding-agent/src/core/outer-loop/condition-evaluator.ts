@@ -61,8 +61,15 @@ function intentMatch(
 ): { matched: boolean; fingerprint?: string } | undefined {
 	const intent = job.trigger.type === "monitor" ? job.trigger.intent : undefined;
 	if (!intent) return undefined;
-	if (intent.kind === "process") {
-		return { matched: observation.fields.status === "exited" || observation.fields.status === "not_found" };
+	switch (intent.kind) {
+		case "process":
+			return { matched: observation.fields.status === "exited" || observation.fields.status === "not_found" };
+		case "task":
+			return { matched: observation.fields.finished === true };
+		case "custom":
+			return { matched: observation.fields.wakeRequested === true };
+		case "file":
+			break;
 	}
 	const exists = observation.fields.exists === true;
 	if (intent.event === "exists") return { matched: exists };

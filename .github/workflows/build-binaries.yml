@@ -75,6 +75,16 @@ jobs:
             --offline-model-data \
             --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
 
+      - name: Install AutoPi release dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build AutoPi Linux CLI and VSIX
+        run: |
+          npm run build:offline
+          node scripts/build-vscode.mjs
+          npm run package:cli:linux -- --skip-build
+          npm run package:vscode:linux -- --skip-build
+
       - name: Prepare GitHub release payload
         run: |
           set -euo pipefail
@@ -104,6 +114,10 @@ jobs:
           done
 
           cp "${binary_assets[@]}" "${GITHUB_WORKSPACE}/release-assets/"
+          cp "${GITHUB_WORKSPACE}/.artifacts/cli/AutoPi-${VERSION}-linux-x64.tar.gz" "${GITHUB_WORKSPACE}/release-assets/"
+          cp "${GITHUB_WORKSPACE}/.artifacts/cli/AutoPi-${VERSION}-linux-x64.tar.gz.sha256" "${GITHUB_WORKSPACE}/release-assets/"
+          cp "${GITHUB_WORKSPACE}/.artifacts/vscode/AutoPi-${VERSION}-linux-x64.vsix" "${GITHUB_WORKSPACE}/release-assets/"
+          cp "${GITHUB_WORKSPACE}/.artifacts/vscode/AutoPi-${VERSION}-linux-x64.vsix.sha256" "${GITHUB_WORKSPACE}/release-assets/"
 
           cd "${GITHUB_WORKSPACE}/release-assets"
           source_asset="pi-${VERSION}-source.tar.gz"
@@ -115,6 +129,10 @@ jobs:
             pi-linux-arm64.tar.gz
             pi-windows-x64.zip
             pi-windows-arm64.zip
+            "AutoPi-${VERSION}-linux-x64.tar.gz"
+            "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+            "AutoPi-${VERSION}-linux-x64.vsix"
+            "AutoPi-${VERSION}-linux-x64.vsix.sha256"
             pi-coding-agent-install-package.json
             pi-coding-agent-install-package-lock.json
           )
@@ -128,9 +146,54 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  build-windows-vsix:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Hydrate offline model data
+        run: npm run hydrate:model-data
+
+      - name: Build and verify Windows VSIX
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          npm run package:vscode:windows
+          npm run test:vscode:integration -- --vsix ".artifacts/vscode/AutoPi-$version-win32-x64.vsix"
+
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-vsix-${{ env.RELEASE_TAG }}
+          path: |
+            .artifacts/vscode/AutoPi-*-win32-x64.vsix
+            .artifacts/vscode/AutoPi-*-win32-x64.vsix.sha256
+          if-no-files-found: error
+          retention-days: 14
+
   stage-github-release:
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+      - build
+      - build-windows-vsix
     permissions:
       actions: read
       contents: write
@@ -142,6 +205,12 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-assets-${{ env.RELEASE_TAG }}
+          path: release-assets
+
+      - name: Download Windows VSIX
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-vsix-${{ env.RELEASE_TAG }}
           path: release-assets
 
       - name: Validate GitHub release payload
@@ -160,6 +229,12 @@ jobs:
             pi-linux-arm64.tar.gz
             pi-windows-x64.zip
             pi-windows-arm64.zip
+            "AutoPi-${VERSION}-linux-x64.tar.gz"
+            "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+            "AutoPi-${VERSION}-linux-x64.vsix"
+            "AutoPi-${VERSION}-linux-x64.vsix.sha256"
+            "AutoPi-${VERSION}-win32-x64.vsix"
+            "AutoPi-${VERSION}-win32-x64.vsix.sha256"
             pi-coding-agent-install-package.json
             pi-coding-agent-install-package-lock.json
             SHA256SUMS
@@ -170,6 +245,27 @@ jobs:
             test -f "${asset}"
           done
 
+          sha256sum -c "AutoPi-${VERSION}-linux-x64.vsix.sha256"
+          sha256sum -c "AutoPi-${VERSION}-win32-x64.vsix.sha256"
+          sha256sum -c "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+          checksum_assets=(
+            "${source_asset}"
+            pi-darwin-arm64.tar.gz
+            pi-darwin-x64.tar.gz
+            pi-linux-x64.tar.gz
+            pi-linux-arm64.tar.gz
+            pi-windows-x64.zip
+            pi-windows-arm64.zip
+            "AutoPi-${VERSION}-linux-x64.tar.gz"
+            "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+            "AutoPi-${VERSION}-linux-x64.vsix"
+            "AutoPi-${VERSION}-linux-x64.vsix.sha256"
+            "AutoPi-${VERSION}-win32-x64.vsix"
+            "AutoPi-${VERSION}-win32-x64.vsix.sha256"
+            pi-coding-agent-install-package.json
+            pi-coding-agent-install-package-lock.json
+          )
+          sha256sum "${checksum_assets[@]}" > SHA256SUMS
           sha256sum -c SHA256SUMS
 
       - name: Create draft GitHub Release and upload assets
@@ -190,6 +286,12 @@ jobs:
             pi-linux-arm64.tar.gz
             pi-windows-x64.zip
             pi-windows-arm64.zip
+            "AutoPi-${VERSION}-linux-x64.tar.gz"
+            "AutoPi-${VERSION}-linux-x64.tar.gz.sha256"
+            "AutoPi-${VERSION}-linux-x64.vsix"
+            "AutoPi-${VERSION}-linux-x64.vsix.sha256"
+            "AutoPi-${VERSION}-win32-x64.vsix"
+            "AutoPi-${VERSION}-win32-x64.vsix.sha256"
             pi-coding-agent-install-package.json
             pi-coding-agent-install-package-lock.json
             SHA256SUMS
@@ -343,6 +445,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+      - build-windows-vsix
       - stage-github-release
       - publish-npm
       - announce-pi-dev-release

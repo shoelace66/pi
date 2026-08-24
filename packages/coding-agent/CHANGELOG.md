@@ -4,11 +4,21 @@
 
 ### Added
 
+- Added process-local background task management with captured logs, exit status, cancellation, process-tree cleanup, and `background_task` / `outer_loop.wait_task` tools shared by CLI, desktop, and RPC hosts.
+- Added CLI `outer_loop.wait_custom` with isolated QuickJS/WASM execution, bounded read-only host requests, global Origin ceilings, mandatory wake rechecks, and fail-safe error wakeups.
+- Added typed RPC readiness and automation events, automation listing/cancellation, extension UI responses, and configurable backend executable arguments for embedded clients.
 - Added a fullscreen exit output setting to choose between printing the final transcript and only a session resume hint.
 
 ### Changed
 
 - Replaced the inherited Mistral SDK transport with a native Chat Completions HTTP stream, eliminating its generated client and schema runtime overhead.
+
+### Fixed
+
+- Published provider-compatible flat root schemas for `outer_loop` and `background_task`, while retaining strict action-specific validation at the execution boundary.
+- Fixed task-intent terminal matching, added event-driven terminal sampling, and made wait calls a hard stage boundary for later tool calls in the same model batch.
+- Retried generic transient socket-close failures in the CLI session layer and prevented failed resumed agent turns from being journaled as completed wakes.
+- Cleaned generated output before Node package builds so standalone-binary metadata cannot shadow the package root in embedded runtimes.
 
 ## [0.84.1] - 2026-08-07
 

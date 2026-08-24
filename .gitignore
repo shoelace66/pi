@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .artifacts/
+apps/vscode/resources/backend/
+apps/vscode/media/*.png
 *.log
 .DS_Store
 *.tsbuildinfo
@@ -36,6 +38,7 @@ release-package*/
 
 # Editor files
 .vscode/
+.vscode-test/
 .zed/
 .idea/
 .claude/
