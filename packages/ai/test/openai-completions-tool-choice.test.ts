@@ -195,7 +195,7 @@ describe("openai-completions tool_choice", () => {
 		expect("strict" in (tool ?? {})).toBe(false);
 	});
 
-	it("sanitizes all tool schemas for Moonshot without mutating the source", async () => {
+	it("applies the detected MFJS tool schema profile without mutating the source", async () => {
 		const model = getModel("moonshotai", "kimi-k2.6")!;
 		const parameters = {
 			type: "object",
@@ -271,9 +271,9 @@ describe("openai-completions tool_choice", () => {
 		expect(tool?.strict).toBe(false);
 	});
 
-	it("allows explicit Moonshot schema format for custom endpoints", async () => {
+	it("allows an explicit MFJS schema profile for custom endpoints", async () => {
 		const baseModel = getModel("openai", "gpt-4o-mini")!;
-		const model = { ...baseModel, api: "openai-completions", compat: { toolSchemaFormat: "moonshot" } } as const;
+		const model = { ...baseModel, api: "openai-completions", compat: { toolSchemaProfile: "mfjs" } } as const;
 		const parameters = { type: "object", anyOf: [{ type: "object", properties: { value: { type: "string" } } }] };
 		let payload: unknown;
 

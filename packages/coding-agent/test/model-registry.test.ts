@@ -452,7 +452,7 @@ describe("ModelRegistry", () => {
 							},
 							compat: {
 								supportsStrictMode: false,
-								toolSchemaFormat: "moonshot",
+								toolSchemaProfile: "mfjs",
 								cacheControlFormat: "anthropic",
 							},
 						},
@@ -467,7 +467,7 @@ describe("ModelRegistry", () => {
 			expect(registry.getError()).toBeUndefined();
 			expect(model?.thinkingLevelMap).toEqual({ minimal: null, high: "max" });
 			expect(compat?.supportsStrictMode).toBe(false);
-			expect(compat?.toolSchemaFormat).toBe("moonshot");
+			expect(compat?.toolSchemaProfile).toBe("mfjs");
 			expect(compat?.cacheControlFormat).toBe("anthropic");
 		});
 

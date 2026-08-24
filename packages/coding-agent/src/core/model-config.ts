@@ -101,7 +101,7 @@ const OpenAICompletionsCompatSchema = Type.Object({
 	vercelGatewayRouting: Type.Optional(VercelGatewayRoutingSchema),
 	supportsOpenAIGrammarTools: Type.Optional(Type.Boolean()),
 	supportsStrictMode: Type.Optional(Type.Boolean()),
-	toolSchemaFormat: Type.Optional(Type.Literal("moonshot")),
+	toolSchemaProfile: Type.Optional(Type.Literal("mfjs")),
 	sendSessionAffinityHeaders: Type.Optional(Type.Boolean()),
 	deferredToolsMode: Type.Optional(Type.Literal("kimi")),
 	sessionAffinityFormat: Type.Optional(

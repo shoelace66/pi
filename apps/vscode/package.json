@@ -122,7 +122,7 @@
 		"clean": "shx rm -rf dist resources/backend/*",
 		"build": "node ../../scripts/build-vscode.mjs",
 		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p webview/tsconfig.json --noEmit",
-		"test": "vitest --run --configLoader runner",
+		"test": "vitest --run --dir test --configLoader runner",
 		"test:integration": "node ../../scripts/run-vscode-integration.mjs",
 		"package": "node ../../scripts/package-vscode.mjs",
 		"package:linux": "node ../../scripts/package-vscode.mjs --target linux-x64",

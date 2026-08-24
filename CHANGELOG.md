@@ -19,6 +19,7 @@
 - Serialized backend restarts, reduced token-stream Webview rebuilds, scoped credentials by workspace and provider, and supported Node `.js`, `.mjs`, and `.cjs` backend entries.
 - Added generic custom-monitor status, trigger cause and structured error details to the automation view, plus Windows and Linux x64 VSIX packaging.
 - Added a Linux x64 CLI package with executable launchers, bundled runtime assets, build manifests and reproducible archive verification.
+- Generalized the VS Code bundled Core's restricted tool schema handling into capability-selected protocol profiles without changing canonical runtime validation.
 
 ## 0.84.1 — 2026-08-22
 

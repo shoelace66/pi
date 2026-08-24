@@ -1,10 +1,9 @@
+import type { ToolSchemaProfile } from "../types.ts";
+
 /**
- * Convert ordinary JSON Schema into the restricted schema dialect accepted by
- * Moonshot tool calling (MFJS).
- *
- * This function is deliberately provider-boundary code. Callers keep the
- * original tool schema for validation and execution; the returned value is a
- * detached wire representation only.
+ * Convert canonical tool schemas into provider wire profiles. Callers retain
+ * the original schema for runtime validation; converters only produce detached
+ * request payloads at the API boundary.
  */
 
 type SchemaObject = Record<string, unknown>;
@@ -37,13 +36,15 @@ const DROPPED_KEYWORDS = new Set([
 
 const ANNOTATION_KEYS = new Set(["description", "default", "examples", "$defs"]);
 
-export class MoonshotSchemaError extends Error {
+export class ToolSchemaProfileError extends Error {
+	readonly profile: ToolSchemaProfile;
 	readonly toolName: string;
 	readonly path: string;
 
-	constructor(toolName: string, path: string, message: string) {
-		super(`Moonshot schema for tool "${toolName}" at ${path}: ${message}`);
-		this.name = "MoonshotSchemaError";
+	constructor(toolName: string, path: string, message: string, profile: ToolSchemaProfile = "mfjs") {
+		super(`${profile.toUpperCase()} tool schema for "${toolName}" at ${path}: ${message}`);
+		this.name = "ToolSchemaProfileError";
+		this.profile = profile;
 		this.toolName = toolName;
 		this.path = path;
 	}
@@ -76,7 +77,7 @@ function enumType(values: unknown[]): "string" | "integer" | "number" | undefine
 
 function appendNote(description: unknown, note: string): string {
 	const prefix = typeof description === "string" && description.length > 0 ? `${description} ` : "";
-	return `${prefix}[Moonshot compatibility: ${note}]`;
+	return `${prefix}[MFJS profile: ${note}]`;
 }
 
 function copyWithout(source: SchemaObject, keys: Set<string>): SchemaObject {
@@ -101,17 +102,18 @@ function mergeObjectSchemas(left: SchemaObject, right: SchemaObject, toolName: s
 	const leftType = left.type;
 	const rightType = right.type;
 	if (leftType !== undefined && leftType !== "object") {
-		throw new MoonshotSchemaError(toolName, path, "cannot merge a non-object schema");
+		throw new ToolSchemaProfileError(toolName, path, "cannot merge a non-object schema");
 	}
 	if (rightType !== undefined && rightType !== "object") {
-		throw new MoonshotSchemaError(toolName, path, "cannot merge a non-object schema");
+		throw new ToolSchemaProfileError(toolName, path, "cannot merge a non-object schema");
 	}
 
 	const result: SchemaObject = { ...left, ...right, type: "object" };
 	const properties: SchemaObject = {};
 	for (const source of [left.properties, right.properties]) {
 		if (source === undefined) continue;
-		if (!isSchemaObject(source)) throw new MoonshotSchemaError(toolName, path, "object properties must be an object");
+		if (!isSchemaObject(source))
+			throw new ToolSchemaProfileError(toolName, path, "object properties must be an object");
 		Object.assign(properties, source);
 	}
 	if (Object.keys(properties).length > 0) result.properties = properties;
@@ -124,7 +126,7 @@ function mergeObjectSchemas(left: SchemaObject, right: SchemaObject, toolName: s
 		const a = JSON.stringify(left.additionalProperties);
 		const b = JSON.stringify(right.additionalProperties);
 		if (a !== b) {
-			throw new MoonshotSchemaError(toolName, path, "conflicting additionalProperties constraints");
+			throw new ToolSchemaProfileError(toolName, path, "conflicting additionalProperties constraints");
 		}
 	}
 
@@ -133,12 +135,12 @@ function mergeObjectSchemas(left: SchemaObject, right: SchemaObject, toolName: s
 
 function sanitizeBooleanSchema(value: boolean, toolName: string, path: string): SchemaObject {
 	if (value) return { type: "object", additionalProperties: true };
-	throw new MoonshotSchemaError(toolName, path, "boolean false schemas cannot be represented safely");
+	throw new ToolSchemaProfileError(toolName, path, "boolean false schemas cannot be represented safely");
 }
 
 function sanitizeTypeArray(types: unknown[], toolName: string, path: string): SchemaObject {
 	if (types.length === 0 || types.some((type) => typeof type !== "string")) {
-		throw new MoonshotSchemaError(toolName, path, "type arrays must contain non-empty strings");
+		throw new ToolSchemaProfileError(toolName, path, "type arrays must contain non-empty strings");
 	}
 	return {
 		anyOf: types.map((type) => ({ type })),
@@ -148,7 +150,7 @@ function sanitizeTypeArray(types: unknown[], toolName: string, path: string): Sc
 function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): SchemaObject {
 	const rawBranches = source.anyOf;
 	if (!Array.isArray(rawBranches) || rawBranches.length === 0) {
-		throw new MoonshotSchemaError(toolName, `${path}.anyOf`, "anyOf must contain at least one schema");
+		throw new ToolSchemaProfileError(toolName, `${path}.anyOf`, "anyOf must contain at least one schema");
 	}
 	const branches: SchemaObject[] = rawBranches.flatMap<SchemaObject>((branch, index) => {
 		const branchPath = `${path}.anyOf[${index}]`;
@@ -157,7 +159,7 @@ function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): Sc
 		if (Array.isArray(sanitized.anyOf)) {
 			return sanitized.anyOf.map((nested, nestedIndex) => {
 				if (!isSchemaObject(nested) || (nested.type === undefined && !("$ref" in nested))) {
-					throw new MoonshotSchemaError(
+					throw new ToolSchemaProfileError(
 						toolName,
 						`${branchPath}.anyOf[${nestedIndex}]`,
 						"nested anyOf branches must declare an explicit type",
@@ -167,7 +169,7 @@ function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): Sc
 			});
 		}
 		if (Object.keys(sanitized).length === 0) return { type: "object", additionalProperties: true };
-		throw new MoonshotSchemaError(toolName, branchPath, "anyOf branches must declare an explicit type");
+		throw new ToolSchemaProfileError(toolName, branchPath, "anyOf branches must declare an explicit type");
 	});
 
 	const siblingKeys = new Set(Object.keys(source).filter((key) => key !== "anyOf" && !ANNOTATION_KEYS.has(key)));
@@ -183,7 +185,7 @@ function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): Sc
 		(key) => key in siblings,
 	);
 	if (!hasObjectConstraints) {
-		throw new MoonshotSchemaError(
+		throw new ToolSchemaProfileError(
 			toolName,
 			path,
 			`unsupported sibling keywords next to anyOf: ${[...siblingKeys].join(", ")}`,
@@ -197,7 +199,7 @@ function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): Sc
 		const parentType = sanitizedSiblings.type;
 		if (parentType !== undefined && parentType !== "object") {
 			if (branchType !== parentType) {
-				throw new MoonshotSchemaError(toolName, branchPath, "parent type conflicts with an anyOf branch");
+				throw new ToolSchemaProfileError(toolName, branchPath, "parent type conflicts with an anyOf branch");
 			}
 			return branch;
 		}
@@ -213,7 +215,7 @@ function sanitizeAnyOf(source: SchemaObject, toolName: string, path: string): Sc
 function sanitizeAllOf(source: SchemaObject, toolName: string, path: string): SchemaObject {
 	const rawBranches = source.allOf;
 	if (!Array.isArray(rawBranches) || rawBranches.length === 0) {
-		throw new MoonshotSchemaError(toolName, `${path}.allOf`, "allOf must contain at least one schema");
+		throw new ToolSchemaProfileError(toolName, `${path}.allOf`, "allOf must contain at least one schema");
 	}
 	let merged: SchemaObject = { type: "object" };
 	let union: SchemaObject[] | undefined;
@@ -226,7 +228,7 @@ function sanitizeAllOf(source: SchemaObject, toolName: string, path: string): Sc
 		if (Array.isArray(sanitized.anyOf)) {
 			const variants = sanitized.anyOf.filter(isSchemaObject);
 			if (variants.length !== sanitized.anyOf.length || variants.some((variant) => variant.type !== "object")) {
-				throw new MoonshotSchemaError(
+				throw new ToolSchemaProfileError(
 					toolName,
 					`${path}.allOf[${index}].anyOf`,
 					"allOf can only distribute object anyOf branches",
@@ -248,10 +250,10 @@ function sanitizeAllOf(source: SchemaObject, toolName: string, path: string): Sc
 
 function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObject {
 	if (typeof value === "boolean") return sanitizeBooleanSchema(value, toolName, path);
-	if (!isSchemaObject(value)) throw new MoonshotSchemaError(toolName, path, "schema nodes must be objects");
+	if (!isSchemaObject(value)) throw new ToolSchemaProfileError(toolName, path, "schema nodes must be objects");
 
 	if ("oneOf" in value) {
-		throw new MoonshotSchemaError(toolName, `${path}.oneOf`, "oneOf is not safely representable in MFJS");
+		throw new ToolSchemaProfileError(toolName, `${path}.oneOf`, "oneOf is not safely representable in MFJS");
 	}
 	if ("allOf" in value) return sanitizeAllOf(value, toolName, path);
 	if ("anyOf" in value) return sanitizeAnyOf(value, toolName, path);
@@ -270,7 +272,8 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 			continue;
 		}
 		if (key === "properties") {
-			if (!isSchemaObject(raw)) throw new MoonshotSchemaError(toolName, `${path}.properties`, "must be an object");
+			if (!isSchemaObject(raw))
+				throw new ToolSchemaProfileError(toolName, `${path}.properties`, "must be an object");
 			const properties: SchemaObject = {};
 			for (const [name, schema] of Object.entries(raw)) {
 				properties[name] = sanitizeNode(schema, toolName, pathKey(`${path}.properties`, name));
@@ -279,20 +282,20 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 			continue;
 		}
 		if (key === "$defs" || key === "definitions") {
-			if (!isSchemaObject(raw)) throw new MoonshotSchemaError(toolName, `${path}.${key}`, "must be an object");
+			if (!isSchemaObject(raw)) throw new ToolSchemaProfileError(toolName, `${path}.${key}`, "must be an object");
 			const definitions: SchemaObject = {};
 			for (const [name, schema] of Object.entries(raw)) {
 				definitions[name] = sanitizeNode(schema, toolName, pathKey(`${path}.${key}`, name));
 			}
 			if (result.$defs && key === "definitions") {
-				throw new MoonshotSchemaError(toolName, path, "both definitions and $defs are present");
+				throw new ToolSchemaProfileError(toolName, path, "both definitions and $defs are present");
 			}
 			result.$defs = definitions;
 			continue;
 		}
 		if (key === "items") {
 			if (Array.isArray(raw))
-				throw new MoonshotSchemaError(toolName, `${path}.items`, "tuple items are unsupported");
+				throw new ToolSchemaProfileError(toolName, `${path}.items`, "tuple items are unsupported");
 			result.items = sanitizeNode(raw ?? true, toolName, `${path}.items`);
 			continue;
 		}
@@ -303,7 +306,7 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 		}
 		if (key === "enum") {
 			if (!Array.isArray(raw) || enumType(raw) === undefined) {
-				throw new MoonshotSchemaError(toolName, `${path}.enum`, "must contain primitive values");
+				throw new ToolSchemaProfileError(toolName, `${path}.enum`, "must contain primitive values");
 			}
 			result.enum = [...raw];
 			continue;
@@ -311,7 +314,11 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 		if (key === "const") {
 			const type = enumType([raw]);
 			if (type === undefined) {
-				throw new MoonshotSchemaError(toolName, `${path}.const`, "const must be converted from a string or number");
+				throw new ToolSchemaProfileError(
+					toolName,
+					`${path}.const`,
+					"const must be converted from a string or number",
+				);
 			}
 			result.enum = [raw];
 			continue;
@@ -339,7 +346,7 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 		result.items = { type: "object", additionalProperties: true };
 	if (result.required !== undefined) {
 		if (!Array.isArray(result.required) || result.required.some((item) => typeof item !== "string")) {
-			throw new MoonshotSchemaError(toolName, `${path}.required`, "must be an array of strings");
+			throw new ToolSchemaProfileError(toolName, `${path}.required`, "must be an array of strings");
 		}
 		if (result.required.length === 0) delete result.required;
 	}
@@ -348,7 +355,7 @@ function sanitizeNode(value: unknown, toolName: string, path: string): SchemaObj
 	return result;
 }
 
-function validateMoonshotReferences(
+function validateToolSchemaReferences(
 	schema: SchemaObject,
 	toolName: string,
 	path: string,
@@ -357,34 +364,38 @@ function validateMoonshotReferences(
 ): void {
 	if (schema.$defs !== undefined) {
 		if (!root || !isSchemaObject(schema.$defs)) {
-			throw new MoonshotSchemaError(toolName, `${path}.$defs`, "$defs must be an object at the schema root");
+			throw new ToolSchemaProfileError(toolName, `${path}.$defs`, "$defs must be an object at the schema root");
 		}
 		for (const [name, definition] of Object.entries(schema.$defs)) {
 			if (!isSchemaObject(definition)) {
-				throw new MoonshotSchemaError(toolName, pathKey(`${path}.$defs`, name), "must be an object schema");
+				throw new ToolSchemaProfileError(toolName, pathKey(`${path}.$defs`, name), "must be an object schema");
 			}
-			validateMoonshotReferences(definition, toolName, pathKey(`${path}.$defs`, name), schema.$defs, false);
+			validateToolSchemaReferences(definition, toolName, pathKey(`${path}.$defs`, name), schema.$defs, false);
 		}
 	}
 	if (schema.$ref !== undefined) {
 		if (typeof schema.$ref !== "string") {
-			throw new MoonshotSchemaError(toolName, `${path}.$ref`, "must be an internal string reference");
+			throw new ToolSchemaProfileError(toolName, `${path}.$ref`, "must be an internal string reference");
 		}
 		const reference = schema.$ref;
 		if (reference !== "#" && (!reference.startsWith("#/$defs/") || !rootDefs?.[reference.slice("#/$defs/".length)])) {
-			throw new MoonshotSchemaError(toolName, `${path}.$ref`, "must reference # or a definition in the root $defs");
+			throw new ToolSchemaProfileError(
+				toolName,
+				`${path}.$ref`,
+				"must reference # or a definition in the root $defs",
+			);
 		}
 	}
 	if (isSchemaObject(schema.properties)) {
 		for (const [name, child] of Object.entries(schema.properties)) {
 			if (isSchemaObject(child))
-				validateMoonshotReferences(child, toolName, pathKey(`${path}.properties`, name), rootDefs, false);
+				validateToolSchemaReferences(child, toolName, pathKey(`${path}.properties`, name), rootDefs, false);
 		}
 	}
 	if (isSchemaObject(schema.items))
-		validateMoonshotReferences(schema.items, toolName, `${path}.items`, rootDefs, false);
+		validateToolSchemaReferences(schema.items, toolName, `${path}.items`, rootDefs, false);
 	if (isSchemaObject(schema.additionalProperties))
-		validateMoonshotReferences(
+		validateToolSchemaReferences(
 			schema.additionalProperties,
 			toolName,
 			`${path}.additionalProperties`,
@@ -395,7 +406,7 @@ function validateMoonshotReferences(
 		if (Array.isArray(schema[key])) {
 			for (const [index, child] of schema[key].entries()) {
 				if (isSchemaObject(child))
-					validateMoonshotReferences(child, toolName, `${path}.${key}[${index}]`, rootDefs, false);
+					validateToolSchemaReferences(child, toolName, `${path}.${key}[${index}]`, rootDefs, false);
 			}
 		}
 	}
@@ -404,13 +415,13 @@ function validateMoonshotReferences(
 function mergeRootObjectUnion(schema: SchemaObject, toolName: string): SchemaObject {
 	const branches = schema.anyOf;
 	if (!Array.isArray(branches) || branches.length === 0) {
-		throw new MoonshotSchemaError(toolName, "$root", "tool parameters must be an object schema");
+		throw new ToolSchemaProfileError(toolName, "$root", "tool parameters must be an object schema");
 	}
 	if (branches.some((branch) => !isSchemaObject(branch) || branch.type !== "object" || "$ref" in branch)) {
-		throw new MoonshotSchemaError(
+		throw new ToolSchemaProfileError(
 			toolName,
 			"$root.anyOf",
-			"root anyOf must contain only object branches; primitive parameter unions are not supported by Moonshot",
+			"root anyOf must contain only object branches; primitive parameter unions are not supported by the MFJS profile",
 		);
 	}
 
@@ -419,11 +430,11 @@ function mergeRootObjectUnion(schema: SchemaObject, toolName: string): SchemaObj
 	for (const branch of branches) {
 		if (branch.properties !== undefined) {
 			if (!isSchemaObject(branch.properties)) {
-				throw new MoonshotSchemaError(toolName, "$root.anyOf.properties", "must be an object");
+				throw new ToolSchemaProfileError(toolName, "$root.anyOf.properties", "must be an object");
 			}
 			for (const [name, property] of Object.entries(branch.properties)) {
 				if (!isSchemaObject(property)) {
-					throw new MoonshotSchemaError(
+					throw new ToolSchemaProfileError(
 						toolName,
 						pathKey("$root.anyOf.properties", name),
 						"must be an object schema",
@@ -458,14 +469,18 @@ function mergeRootObjectUnion(schema: SchemaObject, toolName: string): SchemaObj
 	if (schema.default !== undefined) result.default = schema.default;
 	result.description = appendNote(
 		result.description,
-		"root object union flattened for Moonshot; canonical runtime validation remains authoritative",
+		"root object union flattened for the MFJS profile; canonical runtime validation remains authoritative",
 	);
 	return result;
 }
 
-export function sanitizeMoonshotToolSchema(schema: unknown, toolName = "tool"): Record<string, unknown> {
+function convertMfjsToolSchema(schema: unknown, toolName: string): Record<string, unknown> {
 	if (isSchemaObject(schema) && Array.isArray(schema.anyOf) && schema.$defs !== undefined) {
-		throw new MoonshotSchemaError(toolName, "$root.$defs", "root $defs cannot be combined with a root anyOf union");
+		throw new ToolSchemaProfileError(
+			toolName,
+			"$root.$defs",
+			"root $defs cannot be combined with a root anyOf union",
+		);
 	}
 	const sanitized = sanitizeNode(schema, toolName, "$root");
 	const result =
@@ -476,8 +491,26 @@ export function sanitizeMoonshotToolSchema(schema: unknown, toolName = "tool"): 
 				: Object.keys(sanitized).length === 0
 					? { type: "object" }
 					: (() => {
-							throw new MoonshotSchemaError(toolName, "$root", "tool parameters must have type object");
+							throw new ToolSchemaProfileError(toolName, "$root", "tool parameters must have type object");
 						})();
-	validateMoonshotReferences(result, toolName, "$root", isSchemaObject(result.$defs) ? result.$defs : undefined, true);
+	validateToolSchemaReferences(
+		result,
+		toolName,
+		"$root",
+		isSchemaObject(result.$defs) ? result.$defs : undefined,
+		true,
+	);
 	return result;
+}
+
+const TOOL_SCHEMA_CONVERTERS = {
+	mfjs: convertMfjsToolSchema,
+} satisfies Record<ToolSchemaProfile, (schema: unknown, toolName: string) => Record<string, unknown>>;
+
+export function convertToolSchema(
+	schema: unknown,
+	toolName: string,
+	profile: ToolSchemaProfile,
+): Record<string, unknown> {
+	return TOOL_SCHEMA_CONVERTERS[profile](schema, toolName);
 }

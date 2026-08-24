@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MoonshotSchemaError, sanitizeMoonshotToolSchema } from "../src/utils/moonshot-schema.ts";
+import { convertToolSchema, ToolSchemaProfileError } from "../src/utils/tool-schema.ts";
 
-describe("Moonshot MFJS schema sanitizer", () => {
-	it("flattens a root object union into Moonshot's required object parameters", () => {
+function convertMfjsToolSchema(schema: unknown, toolName: string): Record<string, unknown> {
+	return convertToolSchema(schema, toolName, "mfjs");
+}
+
+describe("MFJS tool schema profile", () => {
+	it("flattens a root object union into MFJS-required object parameters", () => {
 		const input = {
 			type: "object",
 			anyOf: [
@@ -11,7 +15,7 @@ describe("Moonshot MFJS schema sanitizer", () => {
 			],
 		};
 
-		const output = sanitizeMoonshotToolSchema(input, "outer_loop");
+		const output = convertMfjsToolSchema(input, "outer_loop");
 		expect(output).toMatchObject({ type: "object" });
 		expect(output).not.toHaveProperty("anyOf");
 		expect(output.properties).toEqual({
@@ -21,7 +25,7 @@ describe("Moonshot MFJS schema sanitizer", () => {
 	});
 
 	it("distributes shared object constraints and drops empty required arrays", () => {
-		const output = sanitizeMoonshotToolSchema(
+		const output = convertMfjsToolSchema(
 			{
 				type: "object",
 				properties: {
@@ -51,7 +55,7 @@ describe("Moonshot MFJS schema sanitizer", () => {
 	});
 
 	it("normalizes nested unions and array items", () => {
-		const output = sanitizeMoonshotToolSchema(
+		const output = convertMfjsToolSchema(
 			{
 				type: "object",
 				properties: {
@@ -74,7 +78,7 @@ describe("Moonshot MFJS schema sanitizer", () => {
 	});
 
 	it("gives unconstrained anyOf branches an explicit MFJS object type", () => {
-		expect(sanitizeMoonshotToolSchema({ anyOf: [{}] }, "unconstrained_union")).toMatchObject({
+		expect(convertMfjsToolSchema({ anyOf: [{}] }, "unconstrained_union")).toMatchObject({
 			type: "object",
 			additionalProperties: true,
 		});
@@ -82,7 +86,7 @@ describe("Moonshot MFJS schema sanitizer", () => {
 
 	it("adds object and array types when standard schemas omit them", () => {
 		expect(
-			sanitizeMoonshotToolSchema(
+			convertMfjsToolSchema(
 				{ properties: { value: { enum: ["a", "b"] }, list: { type: "array" } } },
 				"missing_types",
 			),
@@ -98,21 +102,21 @@ describe("Moonshot MFJS schema sanitizer", () => {
 	it("does not mutate the source schema", () => {
 		const input = { type: "object", properties: { value: { type: "string" } } };
 		const before = JSON.parse(JSON.stringify(input));
-		sanitizeMoonshotToolSchema(input, "immutable");
+		convertMfjsToolSchema(input, "immutable");
 		expect(input).toEqual(before);
 	});
 
 	it("rejects boolean false and unsafe oneOf with tool/path diagnostics", () => {
-		expect(() => sanitizeMoonshotToolSchema({ type: "object", properties: { value: false } }, "bad_tool")).toThrow(
-			'Moonshot schema for tool "bad_tool" at $root.properties.value',
+		expect(() => convertMfjsToolSchema({ type: "object", properties: { value: false } }, "bad_tool")).toThrow(
+			'MFJS tool schema for "bad_tool" at $root.properties.value',
 		);
-		expect(() =>
-			sanitizeMoonshotToolSchema({ oneOf: [{ type: "string" }, { type: "number" }] }, "bad_union"),
-		).toThrow('Moonshot schema for tool "bad_union" at $root.oneOf');
+		expect(() => convertMfjsToolSchema({ oneOf: [{ type: "string" }, { type: "number" }] }, "bad_union")).toThrow(
+			'MFJS tool schema for "bad_union" at $root.oneOf',
+		);
 	});
 
 	it("preserves supported defaults and reports dropped keywords", () => {
-		const output = sanitizeMoonshotToolSchema(
+		const output = convertMfjsToolSchema(
 			{
 				type: "object",
 				properties: { date: { type: "string", format: "date-time", title: "Date", default: "2026-01-01" } },
@@ -128,10 +132,10 @@ describe("Moonshot MFJS schema sanitizer", () => {
 
 	it("converts string constants to MFJS enums and validates internal definitions", () => {
 		expect(
-			sanitizeMoonshotToolSchema({ type: "object", properties: { action: { const: "list" } } }, "const_tool"),
+			convertMfjsToolSchema({ type: "object", properties: { action: { const: "list" } } }, "const_tool"),
 		).toEqual({ type: "object", properties: { action: { enum: ["list"], type: "string" } } });
 		expect(
-			sanitizeMoonshotToolSchema(
+			convertMfjsToolSchema(
 				{
 					type: "object",
 					properties: { node: { $ref: "#/$defs/node" } },
@@ -144,16 +148,16 @@ describe("Moonshot MFJS schema sanitizer", () => {
 
 	it("rejects non-MFJS enum values and external or nested references", () => {
 		expect(() =>
-			sanitizeMoonshotToolSchema({ type: "object", properties: { value: { enum: [true, false] } } }, "enum_tool"),
+			convertMfjsToolSchema({ type: "object", properties: { value: { enum: [true, false] } } }, "enum_tool"),
 		).toThrow(/\.enum/);
 		expect(() =>
-			sanitizeMoonshotToolSchema(
+			convertMfjsToolSchema(
 				{ type: "object", properties: { value: { $ref: "https://example.com/schema" } } },
 				"ref_tool",
 			),
 		).toThrow(/\.\$ref/);
 		expect(() =>
-			sanitizeMoonshotToolSchema(
+			convertMfjsToolSchema(
 				{ type: "object", properties: { value: { $defs: { nested: { type: "string" } } } } },
 				"nested_defs",
 			),
@@ -162,10 +166,10 @@ describe("Moonshot MFJS schema sanitizer", () => {
 
 	it("uses the typed error class", () => {
 		try {
-			sanitizeMoonshotToolSchema(false, "typed_error");
+			convertMfjsToolSchema(false, "typed_error");
 			throw new Error("expected sanitizer to throw");
 		} catch (error) {
-			expect(error).toBeInstanceOf(MoonshotSchemaError);
+			expect(error).toBeInstanceOf(ToolSchemaProfileError);
 		}
 	});
 });

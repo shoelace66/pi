@@ -45,7 +45,10 @@ const compat = {
 	sendSessionAffinityHeaders: false,
 	sessionAffinityFormat: "openai",
 	supportsLongCacheRetention: true,
-} satisfies Omit<Required<OpenAICompletionsCompat>, "cacheControlFormat" | "deferredToolsMode" | "toolSchemaFormat"> & {
+} satisfies Omit<
+	Required<OpenAICompletionsCompat>,
+	"cacheControlFormat" | "deferredToolsMode" | "toolSchemaProfile"
+> & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
 	deferredToolsMode?: OpenAICompletionsCompat["deferredToolsMode"];
 };

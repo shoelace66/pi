@@ -12,6 +12,7 @@
 ### Changed
 
 - Replaced the inherited Mistral SDK transport with a native Chat Completions HTTP stream, eliminating its generated client and schema runtime overhead.
+- Generalized bundled OpenAI-compatible tool schema conversion into an extensible MFJS protocol profile selected through model capabilities instead of a provider-named formatter.
 
 ### Fixed
 

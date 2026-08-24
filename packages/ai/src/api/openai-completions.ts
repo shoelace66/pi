@@ -39,10 +39,10 @@ import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
-import { sanitizeMoonshotToolSchema } from "../utils/moonshot-schema.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import { convertToolSchema } from "../utils/tool-schema.ts";
 import {
 	appendGrammarToolInputJsonDelta,
 	createGrammarToolInputProperties,
@@ -158,12 +158,12 @@ interface OpenAICompatCacheControl {
 
 type ResolvedOpenAICompletionsCompat = Omit<
 	Required<OpenAICompletionsCompat>,
-	"cacheControlFormat" | "deferredToolsMode" | "supportsThinkingTokenBudget" | "toolSchemaFormat"
+	"cacheControlFormat" | "deferredToolsMode" | "supportsThinkingTokenBudget" | "toolSchemaProfile"
 > & {
 	cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
 	deferredToolsMode?: OpenAICompletionsCompat["deferredToolsMode"];
 	supportsThinkingTokenBudget?: OpenAICompletionsCompat["supportsThinkingTokenBudget"];
-	toolSchemaFormat?: OpenAICompletionsCompat["toolSchemaFormat"];
+	toolSchemaProfile?: OpenAICompletionsCompat["toolSchemaProfile"];
 };
 
 type ResolvedChatTemplateKwargValue = string | number | boolean | null;
@@ -1360,10 +1360,9 @@ function convertTools(
 		}
 
 		const strict = resolveJsonSchemaStrictSampling(tool, compat.supportsStrictMode !== false);
-		const parameters =
-			compat.toolSchemaFormat === "moonshot"
-				? sanitizeMoonshotToolSchema(tool.parameters, tool.name)
-				: (tool.parameters as Record<string, unknown>);
+		const parameters = compat.toolSchemaProfile
+			? convertToolSchema(tool.parameters, tool.name, compat.toolSchemaProfile)
+			: (tool.parameters as Record<string, unknown>);
 		return {
 			type: "function",
 			function: {
@@ -1446,6 +1445,14 @@ function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | str
  * Used as the base when model.compat is not set; explicit model.compat
  * entries override these detected values.
  */
+function detectToolSchemaProfile(model: Model<"openai-completions">): OpenAICompletionsCompat["toolSchemaProfile"] {
+	return model.provider === "moonshotai" ||
+		model.provider === "moonshotai-cn" ||
+		model.baseUrl.includes("api.moonshot.")
+		? "mfjs"
+		: undefined;
+}
+
 function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
 	const provider = model.provider;
 	const baseUrl = model.baseUrl;
@@ -1457,7 +1464,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("open.bigmodel.cn");
 	const isTogether =
 		provider === "together" || baseUrl.includes("api.together.ai") || baseUrl.includes("api.together.xyz");
-	const isMoonshot = provider === "moonshotai" || provider === "moonshotai-cn" || baseUrl.includes("api.moonshot.");
+	const toolSchemaProfile = detectToolSchemaProfile(model);
+	const usesMfjsProfile = toolSchemaProfile === "mfjs";
 	const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
 	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
 	const isCloudflareAiGateway = provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
@@ -1474,7 +1482,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("chutes.ai") ||
 		baseUrl.includes("deepseek.com") ||
 		isZai ||
-		isMoonshot ||
+		usesMfjsProfile ||
 		provider === "opencode" ||
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
@@ -1485,7 +1493,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
 		isDeepSeek ||
-		isMoonshot ||
+		usesMfjsProfile ||
 		isCloudflareAiGateway ||
 		isTogether ||
 		isNvidia ||
@@ -1501,7 +1509,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
 		supportsReasoningEffort:
-			!isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isAntLing,
+			!isGrok && !isZai && !usesMfjsProfile && !isTogether && !isCloudflareAiGateway && !isNvidia && !isAntLing,
 		supportsUsageInStreaming: true,
 		supportsFinishReason: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
@@ -1526,8 +1534,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		chatTemplateArgs: {},
 		zaiToolStream: false,
 		supportsThinkingTokenBudget: false,
-		supportsStrictMode: !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
-		toolSchemaFormat: isMoonshot ? "moonshot" : undefined,
+		supportsStrictMode: !usesMfjsProfile && !isTogether && !isCloudflareAiGateway && !isNvidia,
+		toolSchemaProfile,
 		supportsOpenAIGrammarTools: false,
 		cacheControlFormat,
 		sendSessionAffinityHeaders: false,
@@ -1573,7 +1581,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		zaiToolStream: model.compat.zaiToolStream ?? detected.zaiToolStream,
 		supportsThinkingTokenBudget: model.compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,
 		supportsStrictMode: model.compat.supportsStrictMode ?? detected.supportsStrictMode,
-		toolSchemaFormat: model.compat.toolSchemaFormat ?? detected.toolSchemaFormat,
+		toolSchemaProfile: model.compat.toolSchemaProfile ?? detected.toolSchemaProfile,
 		supportsOpenAIGrammarTools: model.compat.supportsOpenAIGrammarTools ?? detected.supportsOpenAIGrammarTools,
 		cacheControlFormat: model.compat.cacheControlFormat ?? detected.cacheControlFormat,
 		sendSessionAffinityHeaders: model.compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,

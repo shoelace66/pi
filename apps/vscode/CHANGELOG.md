@@ -5,6 +5,7 @@
 ### Changed
 
 - Kept the VS Code extension version in lockstep with its bundled AutoPi Core version.
+- Replaced provider-named tool schema handling in the bundled Core with capability-selected protocol profiles while preserving canonical schemas for runtime validation.
 
 ### Fixed
 
@@ -14,6 +15,7 @@
 - Recognized `.js`, `.mjs`, and `.cjs` custom backends as Node entry points.
 - Displayed generic custom-monitor adapter state, check counts, journal trigger causes and structured monitor errors.
 - Packaged and verified target-specific Windows and Linux x64 VSIX backends while keeping monitor and wake behavior in the shared CLI RPC implementation.
+- Restricted unit-test discovery to the extension test directory so downloaded VS Code integration runtimes are never collected as project tests.
 
 ## 0.1.0
 

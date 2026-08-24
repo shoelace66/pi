@@ -6,6 +6,7 @@
 
 - Changed OpenAI Responses deferred tool loading to prefer message-anchored `additional_tools` where supported while retaining tool-search and top-level fallbacks ([#7709](https://github.com/earendil-works/pi/issues/7709)).
 - Replaced the Mistral SDK transport with a native Chat Completions HTTP stream, eliminating its generated client and schema runtime overhead.
+- Generalized restricted OpenAI-compatible tool schema conversion into an extensible MFJS protocol profile selected through model capabilities instead of a provider-named formatter.
 
 ### Fixed
 
