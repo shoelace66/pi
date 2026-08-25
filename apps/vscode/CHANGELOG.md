@@ -4,8 +4,15 @@
 
 ### Changed
 
-- Kept the VS Code extension version in lockstep with its bundled AutoPi Core version.
+- Recorded the bundled AutoPi Core version independently so VS Code-only fixes can be released without changing other products.
 - Replaced provider-named tool schema handling in the bundled Core with capability-selected protocol profiles while preserving canonical schemas for runtime validation.
+- Streamed model reasoning into a dedicated expandable sidebar section while keeping final answers separate.
+- Added slash-command discovery, filtering, keyboard completion and native VS Code command handling in the composer.
+- Added a native `/resume` session picker backed by a read-only RPC session listing operation.
+- Accepted both slash keys for command discovery while normalizing execution to canonical `/command` syntax.
+- Rendered sanitized Markdown with syntax highlighting, safe links and per-code-block copy actions.
+- Added direct setup and recovery actions, persisted approval drafts, broadened generated-file discovery and scoped host restarts to affected workspaces.
+- Lowered the supported VS Code baseline to 1.85 while keeping platform availability explicit.
 
 ### Fixed
 
@@ -16,6 +23,12 @@
 - Displayed generic custom-monitor adapter state, check counts, journal trigger causes and structured monitor errors.
 - Packaged and verified target-specific Windows and Linux x64 VSIX backends while keeping monitor and wake behavior in the shared CLI RPC implementation.
 - Restricted unit-test discovery to the extension test directory so downloaded VS Code integration runtimes are never collected as project tests.
+- Read canonical `thinking` content blocks correctly and throttled live Webview updates to keep reasoning streams responsive.
+- Prevented editor context from corrupting slash commands and routed `/login` through VS Code SecretStorage instead of the model.
+- Prevented `/resume` from reaching the model or triggering unintended workspace inspection.
+- Rejected unknown commands before model dispatch and preserved conversation scroll position during rapid streaming renders.
+- Refreshed command suggestions immediately while typing and blocked Enter from submitting another prompt while a task is running.
+- Opened images in VS Code's binary preview and PDFs with the system viewer instead of the text editor.
 
 ## 0.1.0
 

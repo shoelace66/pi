@@ -1,5 +1,5 @@
 import path from "node:path";
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockRpcClient = {
@@ -9,6 +9,9 @@ type MockRpcClient = {
 const rpcState = vi.hoisted(() => ({
 	clients: [] as MockRpcClient[],
 	refreshFailures: 0,
+	prompts: [] as string[],
+	models: [] as Array<[string, string]>,
+	resumedSessions: [] as string[],
 }));
 
 vi.mock("vscode", () => ({
@@ -22,6 +25,7 @@ vi.mock("vscode", () => ({
 		showErrorMessage: vi.fn(),
 		showInformationMessage: vi.fn(),
 		showWarningMessage: vi.fn(),
+		showQuickPick: vi.fn(async (items: unknown[]) => items[0]),
 	},
 }));
 
@@ -57,6 +61,38 @@ vi.mock("../../../packages/coding-agent/src/modes/rpc/rpc-client.ts", () => ({
 		async listAutomations(): Promise<[]> {
 			return [];
 		}
+
+		async getCommands(): Promise<[]> {
+			return [];
+		}
+
+		async prompt(message: string): Promise<void> {
+			rpcState.prompts.push(message);
+		}
+
+		async setModel(provider: string, model: string): Promise<void> {
+			rpcState.models.push([provider, model]);
+		}
+
+		async listSessions(): Promise<Array<Record<string, unknown>>> {
+			return [
+				{
+					path: "D:\\sessions\\previous.jsonl",
+					id: "previous",
+					cwd: "D:\\workspace",
+					name: "Previous session",
+					created: "2026-08-24T00:00:00.000Z",
+					modified: "2026-08-25T00:00:00.000Z",
+					messageCount: 4,
+					firstMessage: "Continue the task",
+				},
+			];
+		}
+
+		async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+			rpcState.resumedSessions.push(sessionPath);
+			return { cancelled: false };
+		}
 	},
 }));
 
@@ -82,6 +118,9 @@ function createHost(onChanged = vi.fn()): { host: WorkspaceBackendHost; onChange
 beforeEach(() => {
 	rpcState.clients.splice(0);
 	rpcState.refreshFailures = 0;
+	rpcState.prompts.splice(0);
+	rpcState.models.splice(0);
+	rpcState.resumedSessions.splice(0);
 });
 
 describe("VS Code backend host quality behavior", () => {
@@ -102,14 +141,22 @@ describe("VS Code backend host quality behavior", () => {
 		expect(launch.cliPath).toBeUndefined();
 	});
 
-	it("does not publish a full snapshot for message deltas that change no host state", () => {
+	it("throttles streaming message snapshots and exposes reasoning separately", () => {
+		vi.useFakeTimers();
 		const { host, onChanged } = createHost();
 		const internals = host as unknown as BackendHostInternals;
-		internals.handleAgentEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "x" } });
+		internals.handleAgentEvent({ type: "message_start", message: { role: "assistant", content: [] } });
+		internals.handleAgentEvent({
+			type: "message_update",
+			assistantMessageEvent: { type: "thinking_delta", delta: "check first" },
+		});
 		expect(onChanged).not.toHaveBeenCalled();
-
-		internals.handleAgentEvent({ type: "agent_start" });
+		vi.advanceTimersByTime(50);
 		expect(onChanged).toHaveBeenCalledTimes(1);
+		expect(host.getSnapshot().messages.at(-1)).toEqual(
+			expect.objectContaining({ thinking: "check first", streaming: true }),
+		);
+		vi.useRealTimers();
 	});
 
 	it("can retry ensureStarted after the initial refresh fails", async () => {
@@ -123,6 +170,41 @@ describe("VS Code backend host quality behavior", () => {
 		await expect(host.ensureStarted()).resolves.toBeUndefined();
 		expect(rpcState.clients).toHaveLength(2);
 		expect(rpcState.clients[1]?.stopped).toBe(false);
+		await host.stop();
+	});
+
+	it("executes supported slash commands locally instead of sending them to the model", async () => {
+		const { host } = createHost();
+		await host.prompt("\\model openrouter/anthropic/claude-sonnet");
+		expect(rpcState.models).toEqual([["openrouter", "anthropic/claude-sonnet"]]);
+		expect(rpcState.prompts).toEqual([]);
+		await host.stop();
+	});
+
+	it("rejects unknown slash commands instead of sending them to the model", async () => {
+		const { host } = createHost();
+		await expect(host.prompt("/not-a-command")).rejects.toThrow("未知命令 /not-a-command");
+		expect(rpcState.prompts).toEqual([]);
+		await host.stop();
+	});
+
+	it("rejects a second prompt without changing the running host into an error", async () => {
+		const { host } = createHost();
+		const internals = host as unknown as BackendHostInternals;
+		internals.handleAgentEvent({ type: "agent_start" });
+
+		await expect(host.prompt("second prompt")).rejects.toThrow("AutoPi 正在执行");
+		expect(host.getSnapshot().connection).toBe("running");
+		expect(rpcState.prompts).toEqual([]);
+		await host.stop();
+	});
+
+	it("opens a native picker and resumes the selected session locally", async () => {
+		const { host } = createHost();
+		await host.prompt("/resume");
+		expect(vscode.window.showQuickPick).toHaveBeenCalled();
+		expect(rpcState.resumedSessions).toEqual(["D:\\sessions\\previous.jsonl"]);
+		expect(rpcState.prompts).toEqual([]);
 		await host.stop();
 	});
 });

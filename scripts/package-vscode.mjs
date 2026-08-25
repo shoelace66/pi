@@ -362,11 +362,6 @@ if (extensionPackage.autopiCoreVersion !== corePackage.version) {
 		`VS Code extension expects AutoPi core ${extensionPackage.autopiCoreVersion}; repository core is ${corePackage.version}`,
 	);
 }
-if (extensionPackage.version !== corePackage.version) {
-	throw new Error(
-		`VS Code extension version ${extensionPackage.version} must stay in lockstep with AutoPi core ${corePackage.version}`,
-	);
-}
 const options = parseArgs();
 const target = options.target;
 const artifactName = `AutoPi-${extensionPackage.version}-${target.name}.vsix`;

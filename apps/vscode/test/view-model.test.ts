@@ -4,7 +4,7 @@ import path from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RpcAutomation } from "../../../packages/coding-agent/src/modes/rpc/rpc-types.ts";
-import { extractArtifacts, messageText, toUiAutomations } from "../src/view-model.ts";
+import { extractArtifacts, messageText, messageThinking, toUiAutomations, toUiMessages } from "../src/view-model.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -13,16 +13,20 @@ afterEach(async () => {
 });
 
 describe("VS Code view model", () => {
-	it("extracts text content without rendering tool payloads", () => {
+	it("separates thinking from answer text without rendering tool payloads", async () => {
 		const message = {
 			role: "assistant",
 			content: [
-				{ type: "thinking", text: "check first" },
+				{ type: "thinking", thinking: "check first" },
 				{ type: "toolCall", id: "tool-1", name: "read", arguments: { path: "secret.txt" } },
 				{ type: "text", text: "finished" },
 			],
 		} as AgentMessage;
-		expect(messageText(message)).toBe("check first\n\nfinished");
+		expect(messageText(message)).toBe("finished");
+		expect(messageThinking(message)).toBe("check first");
+		expect(await toUiMessages([message], process.cwd())).toEqual([
+			expect.objectContaining({ text: "finished", thinking: "check first" }),
+		]);
 	});
 
 	it("only exposes existing artifacts inside the workspace", async () => {
@@ -31,6 +35,17 @@ describe("VS Code view model", () => {
 		await writeFile(path.join(workspace, "eval.md"), "report");
 		const artifacts = await extractArtifacts("报告在 `eval.md`，不要打开 `../outside.md`。", workspace);
 		expect(artifacts).toEqual([{ label: "eval.md", path: path.join(workspace, "eval.md") }]);
+	});
+
+	it("recognizes common source files and Unicode paths", async () => {
+		const workspace = await mkdtemp(path.join(tmpdir(), "autopi-vscode-"));
+		temporaryDirectories.push(workspace);
+		await writeFile(path.join(workspace, "训练脚本.py"), "print('ok')");
+		await writeFile(path.join(workspace, "组件.tsx"), "export default null");
+		await writeFile(path.join(workspace, "服务.go"), "package main");
+
+		const artifacts = await extractArtifacts("生成了 训练脚本.py、组件.tsx 和 服务.go。", workspace);
+		expect(artifacts.map((artifact) => artifact.label).sort()).toEqual(["服务.go", "组件.tsx", "训练脚本.py"].sort());
 	});
 
 	it("presents task logs and cancellation state", () => {

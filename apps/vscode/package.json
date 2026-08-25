@@ -2,7 +2,7 @@
 	"name": "autopi",
 	"displayName": "AutoPi",
 	"description": "Autonomous coding workflows in a secure VS Code sidebar",
-	"version": "0.84.1",
+	"version": "0.84.2",
 	"publisher": "shoelace66",
 	"license": "MIT",
 	"private": true,
@@ -21,7 +21,7 @@
 		"theme": "dark"
 	},
 	"engines": {
-		"vscode": "^1.134.0"
+		"vscode": "^1.85.0"
 	},
 	"categories": ["Machine Learning", "Other"],
 	"keywords": ["agent", "automation", "autonomous", "coding", "AutoPi"],
@@ -130,9 +130,11 @@
 	},
 	"devDependencies": {
 		"@types/node": "22.19.19",
-		"@types/vscode": "1.134.0",
+		"@types/vscode": "1.85.0",
 		"@vscode/vsce": "3.9.2",
 		"esbuild": "0.28.1",
+		"highlight.js": "10.7.3",
+		"marked": "18.0.5",
 		"shx": "0.4.0",
 		"typescript": "5.9.3",
 		"vitest": "4.1.9"

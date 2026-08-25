@@ -20,7 +20,7 @@ await Promise.all([
 		bundle: true,
 		platform: "node",
 		format: "cjs",
-		target: "node22",
+		target: "node18",
 		external: ["vscode"],
 		logLevel: "info",
 		sourcemap: false,

@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			);
 		}),
 		vscode.workspace.onDidChangeConfiguration((event) => {
-			if (event.affectsConfiguration("autopi")) void provider.restartHosts();
+			if (event.affectsConfiguration("autopi")) void provider.restartAffectedHosts(event);
 		}),
 	);
 }

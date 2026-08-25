@@ -5,6 +5,55 @@ import { isWebviewToHostMessage } from "../shared/protocol.ts";
 import { apiKeyProviderLabel, apiKeySecretKey } from "./api-key-secret.ts";
 import { WorkspaceBackendHost } from "./backend-host.ts";
 
+const imageExtensions = new Set([".bmp", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".svg", ".webp"]);
+const textExtensions = new Set([
+	".bash",
+	".c",
+	".cc",
+	".cpp",
+	".cs",
+	".css",
+	".csv",
+	".cxx",
+	".dart",
+	".go",
+	".h",
+	".hpp",
+	".htm",
+	".html",
+	".java",
+	".js",
+	".json",
+	".jsonl",
+	".jsx",
+	".kt",
+	".kts",
+	".less",
+	".log",
+	".md",
+	".mjs",
+	".php",
+	".ps1",
+	".py",
+	".rb",
+	".rs",
+	".scss",
+	".sh",
+	".sql",
+	".svelte",
+	".swift",
+	".toml",
+	".ts",
+	".tsv",
+	".tsx",
+	".txt",
+	".vue",
+	".xml",
+	".yaml",
+	".yml",
+	".zsh",
+]);
+
 export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode.Disposable {
 	static readonly viewType = "autopi.sidebar";
 
@@ -63,22 +112,47 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 		const key = apiKeySecretKey(folder.uri.toString(), provider || undefined);
 		if (apiKey) await this.context.secrets.store(key, apiKey);
 		else await this.context.secrets.delete(key);
-		await this.restartHosts();
+		await this.restartFoldersWithConfirmation([folder]);
 		return { workspace: folder.name, provider: apiKeyProviderLabel(provider || undefined) };
 	}
 
-	restartHosts(): Promise<void> {
+	restartHosts(workspaceIds?: readonly string[]): Promise<void> {
 		const generation = ++this.restartGeneration;
+		const targets = workspaceIds ? new Set(workspaceIds) : new Set(this.workspaceOptions().map((workspace) => workspace.id));
 		const restart = this.restartPromise.then(async () => {
 			if (this.disposed || generation !== this.restartGeneration) return;
-			const hosts = [...this.hosts.values()];
-			this.hosts.clear();
-			await Promise.allSettled(hosts.map((host) => host.stop()));
+			const hosts = [...this.hosts].filter(([id]) => targets.has(id));
+			for (const [id] of hosts) this.hosts.delete(id);
+			await Promise.allSettled(hosts.map(([, host]) => host.stop()));
 			if (this.disposed || generation !== this.restartGeneration) return;
-			await this.startActiveHost();
+			const activeId = this.activeFolder()?.uri.toString();
+			if (activeId && targets.has(activeId)) await this.startActiveHost();
 		});
 		this.restartPromise = restart.catch(() => undefined);
 		return restart;
+	}
+
+	async restartAffectedHosts(event: vscode.ConfigurationChangeEvent): Promise<void> {
+		const affected = (vscode.workspace.workspaceFolders ?? []).filter((folder) =>
+			event.affectsConfiguration("autopi", folder.uri),
+		);
+		if (affected.length === 0) return;
+		await this.restartFoldersWithConfirmation(affected);
+	}
+
+	private async restartFoldersWithConfirmation(folders: readonly vscode.WorkspaceFolder[]): Promise<void> {
+		const running = folders.filter(
+			(folder) => this.hosts.get(folder.uri.toString())?.getSnapshot().connection === "running",
+		);
+		if (running.length > 0) {
+			const choice = await vscode.window.showWarningMessage(
+				`AutoPi 设置已更改，但 ${running.map((folder) => folder.name).join("、")} 仍在执行任务。是否立即重启受影响的后端？`,
+				"立即重启",
+				"暂不重启",
+			);
+			if (choice !== "立即重启") return;
+		}
+		await this.restartHosts(folders.map((folder) => folder.uri.toString()));
 	}
 
 	dispose(): void {
@@ -109,9 +183,13 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 					}
 					break;
 				case "prompt": {
+					if (await this.handleLocalSlashCommand(message.text)) break;
 					const host = await this.activeHost(true);
 					if (!host) throw new Error("请先在 VS Code 中打开一个项目文件夹。");
-					const prompt = message.includeEditorContext ? this.withEditorContext(message.text, host.folder) : message.text;
+					const prompt =
+						message.includeEditorContext && !/^[\\/]/.test(message.text.trimStart())
+							? this.withEditorContext(message.text, host.folder)
+							: message.text;
 					await host.prompt(prompt);
 					break;
 				}
@@ -123,6 +201,21 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 					break;
 				case "refresh":
 					await this.refresh();
+					break;
+				case "retry":
+					await this.startActiveHost();
+					break;
+				case "configure_api_key":
+					await vscode.commands.executeCommand("autopi.configureApiKey");
+					break;
+				case "open_settings":
+					await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:shoelace66.autopi");
+					break;
+				case "copy_text":
+					await vscode.env.clipboard.writeText(message.text);
+					break;
+				case "open_external":
+					await this.openExternal(message.url);
 					break;
 				case "cancel_automation":
 					await (await this.activeHost(true))?.cancelAutomation(message.automationId);
@@ -139,6 +232,26 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 		} finally {
 			await this.postSnapshot();
 		}
+	}
+
+	private async handleLocalSlashCommand(text: string): Promise<boolean> {
+		const match = /^[\\/](login|logout)(?:\s+([^\s]+))?\s*$/i.exec(text.trim());
+		if (!match) return false;
+		const provider = match[2]?.trim();
+		if (provider) {
+			const folder = this.activeFolder();
+			if (!folder) throw new Error("请先在 VS Code 中打开一个项目文件夹。");
+			await vscode.workspace
+				.getConfiguration("autopi", folder.uri)
+				.update("provider", provider, vscode.ConfigurationTarget.WorkspaceFolder);
+		}
+		if (match[1]?.toLowerCase() === "login") {
+			await vscode.commands.executeCommand("autopi.configureApiKey");
+			return true;
+		}
+		const scope = await this.configureApiKey("");
+		void vscode.window.showInformationMessage(`AutoPi API 密钥已删除（${scope.workspace} / ${scope.provider}）。`);
+		return true;
 	}
 
 	private async startActiveHost(): Promise<void> {
@@ -222,8 +335,30 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 			(!workspaceRelative.startsWith(`..${path.sep}`) && workspaceRelative !== ".." && !path.isAbsolute(workspaceRelative));
 		const allowedLog = host?.getSnapshot().automations.some((automation) => automation.logPath === absolute) ?? false;
 		if (!insideWorkspace && !allowedLog) throw new Error("拒绝打开工作区和 AutoPi 日志目录之外的文件。");
-		const document = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-		await vscode.window.showTextDocument(document, { preview: false });
+		const uri = vscode.Uri.file(absolute);
+		const extension = path.extname(absolute).toLowerCase();
+		if (extension === ".pdf") {
+			await vscode.env.openExternal(uri);
+			return;
+		}
+		if (imageExtensions.has(extension) || extension === ".ipynb") {
+			await vscode.commands.executeCommand("vscode.open", uri);
+			return;
+		}
+		if (textExtensions.has(extension)) {
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document, { preview: false });
+			return;
+		}
+		await vscode.commands.executeCommand("vscode.open", uri);
+	}
+
+	private async openExternal(rawUrl: string): Promise<void> {
+		const uri = vscode.Uri.parse(rawUrl);
+		if (!new Set(["http", "https", "mailto"]).has(uri.scheme.toLowerCase())) {
+			throw new Error("只允许打开 HTTP、HTTPS 或邮件链接。");
+		}
+		await vscode.env.openExternal(uri);
 	}
 
 	private respondToUi(message: Extract<WebviewToHostMessage, { type: "respond_ui" }>): void {
@@ -253,6 +388,7 @@ export class AutoPiSidebarProvider implements vscode.WebviewViewProvider, vscode
 			model: backend?.model ?? "默认模型",
 			sessionName: backend?.sessionName ?? active?.name ?? "未打开工作区",
 			messages: backend?.messages ?? [],
+			commands: backend?.commands ?? [],
 			activities: backend?.activities ?? [],
 			automations: backend?.automations ?? [],
 			pendingRequest: backend?.pendingRequest,

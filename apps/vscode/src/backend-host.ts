@@ -9,18 +9,34 @@ import type {
 	RpcSessionState,
 } from "../../../packages/coding-agent/src/modes/rpc/rpc-types.ts";
 import type { JsonAgentSessionEvent } from "../../../packages/coding-agent/src/modes/json-event.ts";
-import type { UiActivity, UiRequest } from "../shared/protocol.ts";
+import type { UiActivity, UiCommand, UiMessage, UiRequest } from "../shared/protocol.ts";
 import { apiKeySecretKey } from "./api-key-secret.ts";
 import { resolveBundledBackend } from "./backend-runtime.ts";
-import { toUiAutomations, toUiMessages } from "./view-model.ts";
+import { messageText, messageThinking, toUiAutomations, toUiMessages } from "./view-model.ts";
 
 const nodeScriptExtensions = new Set([".js", ".mjs", ".cjs"]);
+type AssistantMessageUpdate = Extract<JsonAgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
+
+const builtInCommands: UiCommand[] = [
+	{ name: "login", description: "配置当前工作区的模型服务密钥", argumentHint: "[provider]", source: "builtin" },
+	{ name: "logout", description: "删除当前工作区的模型服务密钥", argumentHint: "[provider]", source: "builtin" },
+	{ name: "new", description: "开始新会话", source: "builtin" },
+	{ name: "resume", description: "选择并继续历史会话", argumentHint: "[session-path]", source: "builtin" },
+	{ name: "model", description: "切换模型", argumentHint: "<provider/model>", source: "builtin" },
+	{ name: "thinking", description: "设置思考强度", argumentHint: "<level>", source: "builtin" },
+	{ name: "compact", description: "压缩当前会话上下文", argumentHint: "[instructions]", source: "builtin" },
+	{ name: "export", description: "导出当前会话为 HTML", argumentHint: "[path]", source: "builtin" },
+	{ name: "name", description: "设置当前会话名称", argumentHint: "<name>", source: "builtin" },
+	{ name: "copy", description: "复制最后一条 AutoPi 回复", source: "builtin" },
+	{ name: "clone", description: "复制当前会话", source: "builtin" },
+];
 
 export type BackendSnapshot = {
 	connection: "starting" | "ready" | "running" | "error";
 	model: string;
 	sessionName: string;
 	messages: Awaited<ReturnType<typeof toUiMessages>>;
+	commands: UiCommand[];
 	automations: ReturnType<typeof toUiAutomations>;
 	activities: UiActivity[];
 	pendingRequest?: UiRequest;
@@ -42,6 +58,9 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 	private connection: BackendSnapshot["connection"] = "starting";
 	private state?: RpcSessionState;
 	private messages: BackendSnapshot["messages"] = [];
+	private commands: UiCommand[] = builtInCommands;
+	private streamingMessage?: UiMessage;
+	private streamingChangedTimer?: ReturnType<typeof setTimeout>;
 	private automations: RpcAutomation[] = [];
 	private activities = new Map<string, UiActivity>();
 	private pendingRequest?: UiRequest;
@@ -66,12 +85,27 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 	}
 
 	async prompt(text: string): Promise<void> {
+		if (this.connection === "running") {
+			throw new Error("AutoPi 正在执行，请等待完成或先停止当前任务。");
+		}
 		await this.ensureStarted();
+		const normalizedText = text.trim().startsWith("\\") ? `/${text.trim().slice(1)}` : text.trim();
+		if (await this.tryRunBuiltInCommand(normalizedText)) {
+			await this.refresh();
+			return;
+		}
+		if (normalizedText.startsWith("/")) {
+			const name = /^\/([^\s]+)/.exec(normalizedText)?.[1];
+			const command = this.commands.find((candidate) => candidate.name === name);
+			if (!command) throw new Error(`未知命令 /${name ?? ""}。输入 / 查看可用命令。`);
+			if (command.source === "builtin") throw new Error(`命令 /${command.name} 无法在当前界面执行。`);
+		}
 		this.connection = "running";
+		this.streamingMessage = undefined;
 		this.error = undefined;
 		this.callbacks.onChanged();
 		try {
-			await this.client?.prompt(text);
+			await this.client?.prompt(normalizedText);
 			await this.refresh();
 		} catch (error) {
 			this.fail(error);
@@ -87,6 +121,7 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 		await this.ensureStarted();
 		await this.client?.newSession();
 		this.activities.clear();
+		this.streamingMessage = undefined;
 		this.pendingRequest = undefined;
 		await this.refresh();
 	}
@@ -117,7 +152,8 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 			connection: this.connection,
 			model,
 			sessionName: this.state?.sessionName || this.folder.name,
-			messages: this.messages,
+			messages: this.streamingMessage ? [...this.messages, this.streamingMessage] : this.messages,
+			commands: this.commands,
 			automations: toUiAutomations(this.automations),
 			activities: [...this.activities.values()].slice(-30),
 			pendingRequest: this.pendingRequest,
@@ -127,6 +163,7 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 	}
 
 	dispose(): void {
+		if (this.streamingChangedTimer) clearTimeout(this.streamingChangedTimer);
 		void this.stop();
 	}
 
@@ -203,13 +240,27 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 	private async refreshNow(): Promise<void> {
 		const client = this.client;
 		if (!client) return;
-		const [state, messages, automations] = await Promise.all([
+		const [state, messages, automations, commands] = await Promise.all([
 			client.getState(),
 			client.getMessages(),
 			client.listAutomations(true),
+			client.getCommands(),
 		]);
 		this.state = state;
+		const streamingMessage = this.streamingMessage;
 		this.messages = await toUiMessages(messages, this.folder.uri.fsPath);
+		if (this.streamingMessage === streamingMessage) this.streamingMessage = undefined;
+		const builtInNames = new Set(builtInCommands.map((command) => command.name));
+		this.commands = [
+			...builtInCommands,
+			...commands
+				.filter((command) => !builtInNames.has(command.name))
+				.map((command) => ({
+					name: command.name,
+					description: command.description || command.name,
+					source: command.source,
+				})),
+		];
 		this.automations = automations;
 		this.notice = this.messages
 			.map((message) => message.text)
@@ -290,6 +341,22 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 				this.connection = "running";
 				this.callbacks.onChanged();
 				return;
+			case "message_start": {
+				const role = (event.message as unknown as { role?: unknown }).role;
+				if (role !== "assistant") return;
+				this.streamingMessage = {
+					id: "streaming-assistant",
+					role: "assistant",
+					text: messageText(event.message),
+					thinking: messageThinking(event.message) || undefined,
+					streaming: true,
+					artifacts: [],
+				};
+				return;
+			}
+			case "message_update":
+				this.applyMessageUpdate(event.assistantMessageEvent);
+				return;
 			case "tool_execution_start":
 				this.activities.set(event.toolCallId, {
 					id: event.toolCallId,
@@ -311,10 +378,147 @@ export class WorkspaceBackendHost implements vscode.Disposable {
 				return;
 			}
 			case "message_end":
+				if ((event.message as unknown as { role?: unknown }).role === "assistant") {
+					this.streamingMessage = {
+						id: "streaming-assistant",
+						role: "assistant",
+						text: messageText(event.message),
+						thinking: messageThinking(event.message) || undefined,
+						streaming: true,
+						artifacts: [],
+					};
+					this.flushStreamingChanged();
+				}
+				void this.refresh();
+				return;
 			case "agent_settled":
 				void this.refresh();
 				return;
 		}
+	}
+
+	private applyMessageUpdate(event: AssistantMessageUpdate): void {
+		this.streamingMessage ??= {
+			id: "streaming-assistant",
+			role: "assistant",
+			text: "",
+			streaming: true,
+			artifacts: [],
+		};
+		switch (event.type) {
+			case "text_delta":
+				this.streamingMessage.text += event.delta;
+				break;
+			case "text_end":
+				this.streamingMessage.text = event.content;
+				break;
+			case "thinking_delta":
+				this.streamingMessage.thinking = `${this.streamingMessage.thinking ?? ""}${event.delta}`;
+				break;
+			case "thinking_end":
+				this.streamingMessage.thinking = event.content;
+				break;
+			default:
+				return;
+		}
+		this.scheduleStreamingChanged();
+	}
+
+	private async tryRunBuiltInCommand(text: string): Promise<boolean> {
+		if (!text.startsWith("/")) return false;
+		const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
+		if (!match) return false;
+		const name = match[1]?.toLowerCase();
+		const args = match[2]?.trim() ?? "";
+		const client = this.client;
+		if (!client) return false;
+		switch (name) {
+			case "new":
+				await client.newSession();
+				this.activities.clear();
+				this.streamingMessage = undefined;
+				return true;
+			case "resume": {
+				let sessionPath = args;
+				if (!sessionPath) {
+					const sessions = await client.listSessions();
+					if (sessions.length === 0) throw new Error("当前工作区还没有可恢复的历史会话。");
+					const selected = await vscode.window.showQuickPick(
+						sessions.map((candidate) => ({
+							label: candidate.name || candidate.firstMessage || "未命名会话",
+							description: new Date(candidate.modified).toLocaleString(),
+							detail: `${candidate.messageCount} 条消息 · ${candidate.cwd}`,
+							sessionPath: candidate.path,
+						})),
+						{ title: "恢复 AutoPi 会话", placeHolder: "选择要继续的历史会话", matchOnDescription: true, matchOnDetail: true },
+					);
+					if (!selected) return true;
+					sessionPath = selected.sessionPath;
+				}
+				const result = await client.switchSession(sessionPath);
+				if (!result.cancelled) {
+					this.activities.clear();
+					this.streamingMessage = undefined;
+				}
+				return true;
+			}
+			case "model": {
+				const separator = args.indexOf("/");
+				if (separator <= 0 || separator === args.length - 1) {
+					throw new Error("用法：/model <provider/model>");
+				}
+				await client.setModel(args.slice(0, separator), args.slice(separator + 1));
+				return true;
+			}
+			case "thinking": {
+				const levels = await client.getAvailableThinkingLevels();
+				if (!levels.includes(args as (typeof levels)[number])) {
+					throw new Error(`用法：/thinking <${levels.join(" | ")}>`);
+				}
+				await client.setThinkingLevel(args as (typeof levels)[number]);
+				return true;
+			}
+			case "compact":
+				await client.compact(args || undefined);
+				return true;
+			case "export": {
+				const result = await client.exportHtml(args || undefined);
+				void vscode.window.showInformationMessage(`AutoPi 会话已导出：${result.path}`);
+				return true;
+			}
+			case "name":
+				if (!args) throw new Error("用法：/name <name>");
+				await client.setSessionName(args);
+				return true;
+			case "copy": {
+				const lastMessage = await client.getLastAssistantText();
+				if (!lastMessage) throw new Error("当前会话还没有可复制的 AutoPi 回复。");
+				await vscode.env.clipboard.writeText(lastMessage);
+				void vscode.window.showInformationMessage("已复制最后一条 AutoPi 回复。");
+				return true;
+			}
+			case "clone":
+				await client.clone();
+				this.activities.clear();
+				this.streamingMessage = undefined;
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	private scheduleStreamingChanged(): void {
+		if (this.streamingChangedTimer) return;
+		this.streamingChangedTimer = setTimeout(() => {
+			this.streamingChangedTimer = undefined;
+			if (!this.disposed) this.callbacks.onChanged();
+		}, 50);
+	}
+
+	private flushStreamingChanged(): void {
+		if (this.streamingChangedTimer) clearTimeout(this.streamingChangedTimer);
+		this.streamingChangedTimer = undefined;
+		this.callbacks.onChanged();
 	}
 
 	private describe(value: unknown): string {

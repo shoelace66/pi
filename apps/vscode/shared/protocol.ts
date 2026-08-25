@@ -9,10 +9,19 @@ export type UiArtifact = {
 	path: string;
 };
 
+export type UiCommand = {
+	name: string;
+	description: string;
+	argumentHint?: string;
+	source: "builtin" | "extension" | "prompt" | "skill";
+};
+
 export type UiMessage = {
 	id: string;
 	role: "user" | "assistant" | "system";
 	text: string;
+	thinking?: string;
+	streaming?: boolean;
 	artifacts: UiArtifact[];
 };
 
@@ -46,6 +55,7 @@ export type ViewSnapshot = {
 	model: string;
 	sessionName: string;
 	messages: UiMessage[];
+	commands: UiCommand[];
 	activities: UiActivity[];
 	automations: UiAutomation[];
 	pendingRequest?: UiRequest;
@@ -64,6 +74,11 @@ export type WebviewToHostMessage =
 	| { type: "abort" }
 	| { type: "new_session" }
 	| { type: "refresh" }
+	| { type: "retry" }
+	| { type: "configure_api_key" }
+	| { type: "open_settings" }
+	| { type: "copy_text"; text: string }
+	| { type: "open_external"; url: string }
 	| { type: "cancel_automation"; automationId: string }
 	| { type: "open_file"; path: string }
 	| { type: "respond_ui"; requestId: string; value?: string; confirmed?: boolean; cancelled?: boolean };
@@ -78,6 +93,9 @@ export function isWebviewToHostMessage(value: unknown): value is WebviewToHostMe
 		case "abort":
 		case "new_session":
 		case "refresh":
+		case "retry":
+		case "configure_api_key":
+		case "open_settings":
 			return true;
 		case "select_workspace":
 			return typeof record.workspaceId === "string";
@@ -87,6 +105,10 @@ export function isWebviewToHostMessage(value: unknown): value is WebviewToHostMe
 			return typeof record.automationId === "string";
 		case "open_file":
 			return typeof record.path === "string";
+		case "copy_text":
+			return typeof record.text === "string";
+		case "open_external":
+			return typeof record.url === "string";
 		case "respond_ui":
 			return typeof record.requestId === "string";
 		default:

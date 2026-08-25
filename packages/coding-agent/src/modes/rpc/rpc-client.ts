@@ -19,6 +19,7 @@ import type {
 	RpcExtensionUIResponse,
 	RpcProtocolEvent,
 	RpcResponse,
+	RpcSessionInfo,
 	RpcSessionState,
 	RpcSlashCommand,
 } from "./rpc-types.ts";
@@ -444,6 +445,11 @@ export class RpcClient {
 	async getSessionStats(): Promise<SessionStats> {
 		const response = await this.send({ type: "get_session_stats" });
 		return this.getData(response);
+	}
+
+	async listSessions(): Promise<RpcSessionInfo[]> {
+		const response = await this.send({ type: "list_sessions" });
+		return this.getData<{ sessions: RpcSessionInfo[] }>(response).sessions;
 	}
 
 	/**

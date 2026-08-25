@@ -27,6 +27,7 @@ import {
 	waitForRawStdoutBackpressure,
 	writeRawStdout,
 } from "../../core/output-guard.ts";
+import { SessionManager } from "../../core/session-manager.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
@@ -642,6 +643,25 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime, options: RpcM
 			case "get_session_stats": {
 				const stats = session.getSessionStats();
 				return success(id, "get_session_stats", stats);
+			}
+
+			case "list_sessions": {
+				const sessions = await SessionManager.list(
+					session.sessionManager.getCwd(),
+					session.sessionManager.getSessionDir(),
+				);
+				return success(id, "list_sessions", {
+					sessions: sessions.map((candidate) => ({
+						path: candidate.path,
+						id: candidate.id,
+						cwd: candidate.cwd,
+						name: candidate.name,
+						created: candidate.created.toISOString(),
+						modified: candidate.modified.toISOString(),
+						messageCount: candidate.messageCount,
+						firstMessage: candidate.firstMessage,
+					})),
+				});
 			}
 
 			case "export_html": {

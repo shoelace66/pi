@@ -1,19 +1,19 @@
 # AutoPi VS Code 插件零基础使用教程
 
-本文适用于 AutoPi VS Code 插件 `0.84.1`（Windows x64 与 Linux glibc x64）。插件与内置 AutoPi Core 使用同一个锁步版本。平台专用 VSIX 不需要另外安装 Node.js、Python 版客户端或 AutoPi CLI。项目本身需要的训练框架、Python 环境等仍应按项目说明准备。
+本文适用于 AutoPi VS Code 插件 `0.84.2`（VS Code `1.85.0` 及以上版本；Windows x64 与 Linux glibc x64），内置 AutoPi Core 版本为 `0.84.1`。插件发布版本与内置 Core 版本分别记录，因此 VS Code 专属修复可以独立发布。平台专用 VSIX 不需要另外安装 Node.js、Python 版客户端或 AutoPi CLI。项目本身需要的训练框架、Python 环境等仍应按项目说明准备。当前不提供 macOS、Windows ARM64 或 Linux ARM64 安装包。
 
 ## 1. 下载与校验
 
 从 AutoPi GitHub Release 下载：
 
-- Windows：`AutoPi-0.84.1-win32-x64.vsix` 及同名 `.sha256`
-- Linux、Remote SSH 或 WSL：`AutoPi-0.84.1-linux-x64.vsix` 及同名 `.sha256`
+- Windows：`AutoPi-0.84.2-win32-x64.vsix` 及同名 `.sha256`
+- Linux、Remote SSH 或 WSL：`AutoPi-0.84.2-linux-x64.vsix` 及同名 `.sha256`
 
 可选但推荐：在 VSIX 所在目录打开 PowerShell，运行：
 
 ```powershell
-Get-FileHash .\AutoPi-0.84.1-win32-x64.vsix -Algorithm SHA256
-Get-Content .\AutoPi-0.84.1-win32-x64.vsix.sha256
+Get-FileHash .\AutoPi-0.84.2-win32-x64.vsix -Algorithm SHA256
+Get-Content .\AutoPi-0.84.2-win32-x64.vsix.sha256
 ```
 
 两个 SHA-256 值应完全相同。
@@ -21,7 +21,7 @@ Get-Content .\AutoPi-0.84.1-win32-x64.vsix.sha256
 Linux 可直接运行：
 
 ```bash
-sha256sum -c AutoPi-0.84.1-linux-x64.vsix.sha256
+sha256sum -c AutoPi-0.84.2-linux-x64.vsix.sha256
 ```
 
 ## 2. 安装 VSIX
@@ -48,9 +48,9 @@ Remote SSH 和 WSL 中，扩展运行在远程 Linux 工作区宿主。请连接
 
 ## 4. 配置模型和密钥
 
-1. 打开 VS Code 设置，搜索 `AutoPi`。
+1. 点击侧边栏空白页的“打开设置”，或打开 VS Code 设置并搜索 `AutoPi`。
 2. 按所用服务填写 `AutoPi: Provider` 和 `AutoPi: Model`；留空则使用 AutoPi 当前默认配置。
-3. 按 `Ctrl+Shift+P`，运行“AutoPi: 配置 API 密钥”。
+3. 点击侧边栏的“配置 API 密钥”，或按 `Ctrl+Shift+P` 运行“AutoPi: 配置 API 密钥”。
 4. 粘贴密钥并确认。
 
 密钥按“工作区文件夹 + Provider”隔离存入 VS Code SecretStorage，不写入 `settings.json`，也不会出现在后端命令行参数中。重新执行该命令并提交空内容可删除当前工作区和 Provider 的密钥。
@@ -109,7 +109,7 @@ Remote SSH 和 WSL 中，扩展运行在远程 Linux 工作区宿主。请连接
 
 ### 一直显示“启动中”或“后端启动失败”
 
-先点击侧边栏右上角刷新按钮。然后检查：
+先使用错误横幅中的“配置 API 密钥”“打开设置”或“重试”按钮。然后检查：
 
 - 当前工作区是否已受信任；
 - Provider、Model 和 API 密钥是否匹配；
@@ -140,10 +140,10 @@ npm run package:vscode:linux
 产物位于：
 
 ```text
-.artifacts/vscode/AutoPi-0.84.1-win32-x64.vsix
-.artifacts/vscode/AutoPi-0.84.1-win32-x64.vsix.sha256
-.artifacts/vscode/AutoPi-0.84.1-linux-x64.vsix
-.artifacts/vscode/AutoPi-0.84.1-linux-x64.vsix.sha256
+.artifacts/vscode/AutoPi-0.84.2-win32-x64.vsix
+.artifacts/vscode/AutoPi-0.84.2-win32-x64.vsix.sha256
+.artifacts/vscode/AutoPi-0.84.2-linux-x64.vsix
+.artifacts/vscode/AutoPi-0.84.2-linux-x64.vsix.sha256
 ```
 
 Marketplace 正式上架需要 `shoelace66` 发布者凭据；本地 VSIX 和 GitHub Release 分发不需要用户登录 Marketplace。

@@ -7,6 +7,7 @@
 - Added process-local background task management with captured logs, exit status, cancellation, process-tree cleanup, and `background_task` / `outer_loop.wait_task` tools shared by CLI, desktop, and RPC hosts.
 - Added CLI `outer_loop.wait_custom` with isolated QuickJS/WASM execution, bounded read-only host requests, global Origin ceilings, mandatory wake rechecks, and fail-safe error wakeups.
 - Added typed RPC readiness and automation events, automation listing/cancellation, extension UI responses, and configurable backend executable arguments for embedded clients.
+- Added a read-only RPC session listing command so embedded clients can present native resume selectors.
 - Added a fullscreen exit output setting to choose between printing the final transcript and only a session resume hint.
 
 ### Changed

@@ -1,4 +1,4 @@
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKeySecretKey } from "../src/api-key-secret.ts";
 
@@ -10,20 +10,32 @@ type MockHost = {
 };
 
 const state = vi.hoisted(() => ({
-	folder: {
-		name: "workspace-a",
-		uri: { fsPath: "C:\\workspace-a", toString: () => "file:///workspace-a" },
-	},
-	hosts: [] as MockHost[],
-	provider: "openrouter",
+	...(() => {
+		const folder = {
+			name: "workspace-a",
+			uri: { fsPath: "C:\\workspace-a", toString: () => "file:///workspace-a" },
+		};
+		const folderB = {
+			name: "workspace-b",
+			uri: { fsPath: "C:\\workspace-b", toString: () => "file:///workspace-b" },
+		};
+		return {
+			folder,
+			folderB,
+			folders: [folder] as Array<typeof folder>,
+			hosts: [] as MockHost[],
+			provider: "openrouter",
+		};
+	})(),
 }));
 
 vi.mock("vscode", () => ({
 	workspace: {
 		isTrusted: true,
-		workspaceFolders: [state.folder],
+		workspaceFolders: state.folders,
 		onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
 		onDidGrantWorkspaceTrust: vi.fn(() => ({ dispose: vi.fn() })),
+		openTextDocument: vi.fn(),
 		getConfiguration: vi.fn(() => ({
 			get: (key: string, fallback: unknown) => (key === "provider" ? state.provider : fallback),
 		})),
@@ -31,10 +43,23 @@ vi.mock("vscode", () => ({
 	window: {
 		activeTextEditor: undefined,
 		showErrorMessage: vi.fn(),
+		showWarningMessage: vi.fn(),
+		showTextDocument: vi.fn(),
+	},
+	env: {
+		clipboard: { writeText: vi.fn() },
+		openExternal: vi.fn(),
+	},
+	commands: {
+		executeCommand: vi.fn(),
+	},
+	ConfigurationTarget: {
+		WorkspaceFolder: 5,
 	},
 	Uri: {
 		joinPath: vi.fn(),
-		file: vi.fn(),
+		file: vi.fn((fsPath: string) => ({ fsPath, scheme: "file", toString: () => `file:///${fsPath}` })),
+		parse: vi.fn((value: string) => ({ scheme: value.split(":", 1)[0] ?? "", toString: () => value })),
 	},
 }));
 
@@ -60,8 +85,8 @@ vi.mock("../src/backend-host.ts", () => ({
 		async abort(): Promise<void> {}
 		async cancelAutomation(): Promise<void> {}
 
-		getSnapshot(): undefined {
-			return undefined;
+		getSnapshot(): { connection: "ready"; automations: [] } {
+			return { connection: "ready", automations: [] };
 		}
 
 		stop(): Promise<void> {
@@ -103,7 +128,9 @@ function createContext() {
 }
 
 beforeEach(() => {
+	vi.clearAllMocks();
 	state.hosts.splice(0);
+	state.folders.splice(0, state.folders.length, state.folder);
 	state.provider = "openrouter";
 });
 
@@ -137,6 +164,50 @@ describe("AutoPi sidebar host lifecycle", () => {
 		expect(stored).toEqual([
 			[apiKeySecretKey("file:///workspace-a", "openrouter"), "secret-value"],
 		]);
+		await provider.stop();
+	});
+
+	it("handles login as a local VS Code command instead of an agent prompt", async () => {
+		const { context } = createContext();
+		const provider = new AutoPiSidebarProvider(context);
+		const handled = await (
+			provider as unknown as { handleLocalSlashCommand(text: string): Promise<boolean> }
+		).handleLocalSlashCommand("\\login");
+
+		expect(handled).toBe(true);
+		expect(vscode.commands.executeCommand).toHaveBeenCalledWith("autopi.configureApiKey");
+		await provider.stop();
+	});
+
+	it("restarts only workspace hosts affected by a settings change", async () => {
+		state.folders.push(state.folderB);
+		const { context } = createContext();
+		const provider = new AutoPiSidebarProvider(context);
+		await provider.newSession();
+		const hostA = state.hosts[0];
+		(provider as unknown as { activeWorkspaceId: string }).activeWorkspaceId = state.folderB.uri.toString();
+		await provider.newSession();
+		const hostB = state.hosts[1];
+
+		await provider.restartAffectedHosts({
+			affectsConfiguration: (_section: string, scope?: vscode.Uri) => scope?.toString() === state.folderB.uri.toString(),
+		} as vscode.ConfigurationChangeEvent);
+
+		expect(hostA?.stopCalls).toBe(0);
+		expect(hostB?.stopCalls).toBe(1);
+		expect(state.hosts[2]?.started).toBe(true);
+		await provider.stop();
+	});
+
+	it("opens PDFs externally instead of as text documents", async () => {
+		const { context } = createContext();
+		const provider = new AutoPiSidebarProvider(context);
+		await provider.newSession();
+
+		await (provider as unknown as { openFile(filePath: string): Promise<void> }).openFile("C:\\workspace-a\\report.pdf");
+
+		expect(vscode.env.openExternal).toHaveBeenCalled();
+		expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
 		await provider.stop();
 	});
 });
