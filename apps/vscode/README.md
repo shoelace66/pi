@@ -14,7 +14,7 @@ AutoPi 把同一个通用自动化 Agent 带进 VS Code 侧边栏。它可以启
 - 遵循 VS Code Workspace Trust；未受信任工作区只读，不启动后端。
 - Windows x64 与 Linux glibc x64 VSIX 内置 AutoPi 后端，不要求另装 Node.js 或 CLI；支持 VS Code `1.85.0` 及以上版本。
 
-插件发布版本与内置 AutoPi Core 版本分别记录，因此 VS Code 专属修复无需改动其他产品。当前插件版本为 `0.84.2`，内置 Core 版本为 `0.84.1`。
+插件发布版本与内置 AutoPi Core 版本分别记录，因此 VS Code 专属修复无需改动其他产品。当前插件版本为 `0.84.3`，内置 Core 版本为 `0.84.1`。
 
 安装和零基础使用说明见 [VS Code 插件中文教程](https://github.com/shoelace66/AutoPi/blob/main/docs/VSCODE-GETTING-STARTED.zh-CN.md)。
 
@@ -30,4 +30,4 @@ npm run test:vscode
 npm run package:vscode
 ```
 
-正式产物：`.artifacts/vscode/AutoPi-0.84.2-win32-x64.vsix`、`.artifacts/vscode/AutoPi-0.84.2-linux-x64.vsix` 及各自同名 `.sha256` 文件。当前不支持 macOS、Windows ARM64 或 Linux ARM64。
+正式产物：`.artifacts/vscode/AutoPi-0.84.3-win32-x64.vsix`、`.artifacts/vscode/AutoPi-0.84.3-linux-x64.vsix` 及各自同名 `.sha256` 文件。当前不支持 macOS、Windows ARM64 或 Linux ARM64。

@@ -1,19 +1,19 @@
 # AutoPi VS Code 插件零基础使用教程
 
-本文适用于 AutoPi VS Code 插件 `0.84.2`（VS Code `1.85.0` 及以上版本；Windows x64 与 Linux glibc x64），内置 AutoPi Core 版本为 `0.84.1`。插件发布版本与内置 Core 版本分别记录，因此 VS Code 专属修复可以独立发布。平台专用 VSIX 不需要另外安装 Node.js、Python 版客户端或 AutoPi CLI。项目本身需要的训练框架、Python 环境等仍应按项目说明准备。当前不提供 macOS、Windows ARM64 或 Linux ARM64 安装包。
+本文适用于 AutoPi VS Code 插件 `0.84.3`（VS Code `1.85.0` 及以上版本；Windows x64 与 Linux glibc x64），内置 AutoPi Core 版本为 `0.84.1`。插件发布版本与内置 Core 版本分别记录，因此 VS Code 专属修复可以独立发布。平台专用 VSIX 不需要另外安装 Node.js、Python 版客户端或 AutoPi CLI。项目本身需要的训练框架、Python 环境等仍应按项目说明准备。当前不提供 macOS、Windows ARM64 或 Linux ARM64 安装包。
 
 ## 1. 下载与校验
 
 从 AutoPi GitHub Release 下载：
 
-- Windows：`AutoPi-0.84.2-win32-x64.vsix` 及同名 `.sha256`
-- Linux、Remote SSH 或 WSL：`AutoPi-0.84.2-linux-x64.vsix` 及同名 `.sha256`
+- Windows：`AutoPi-0.84.3-win32-x64.vsix` 及同名 `.sha256`
+- Linux、Remote SSH 或 WSL：`AutoPi-0.84.3-linux-x64.vsix` 及同名 `.sha256`
 
 可选但推荐：在 VSIX 所在目录打开 PowerShell，运行：
 
 ```powershell
-Get-FileHash .\AutoPi-0.84.2-win32-x64.vsix -Algorithm SHA256
-Get-Content .\AutoPi-0.84.2-win32-x64.vsix.sha256
+Get-FileHash .\AutoPi-0.84.3-win32-x64.vsix -Algorithm SHA256
+Get-Content .\AutoPi-0.84.3-win32-x64.vsix.sha256
 ```
 
 两个 SHA-256 值应完全相同。
@@ -21,7 +21,7 @@ Get-Content .\AutoPi-0.84.2-win32-x64.vsix.sha256
 Linux 可直接运行：
 
 ```bash
-sha256sum -c AutoPi-0.84.2-linux-x64.vsix.sha256
+sha256sum -c AutoPi-0.84.3-linux-x64.vsix.sha256
 ```
 
 ## 2. 安装 VSIX
@@ -140,10 +140,10 @@ npm run package:vscode:linux
 产物位于：
 
 ```text
-.artifacts/vscode/AutoPi-0.84.2-win32-x64.vsix
-.artifacts/vscode/AutoPi-0.84.2-win32-x64.vsix.sha256
-.artifacts/vscode/AutoPi-0.84.2-linux-x64.vsix
-.artifacts/vscode/AutoPi-0.84.2-linux-x64.vsix.sha256
+.artifacts/vscode/AutoPi-0.84.3-win32-x64.vsix
+.artifacts/vscode/AutoPi-0.84.3-win32-x64.vsix.sha256
+.artifacts/vscode/AutoPi-0.84.3-linux-x64.vsix
+.artifacts/vscode/AutoPi-0.84.3-linux-x64.vsix.sha256
 ```
 
 Marketplace 正式上架需要 `shoelace66` 发布者凭据；本地 VSIX 和 GitHub Release 分发不需要用户登录 Marketplace。

@@ -2,7 +2,7 @@
 	"name": "autopi",
 	"displayName": "AutoPi",
 	"description": "Autonomous coding workflows in a secure VS Code sidebar",
-	"version": "0.84.2",
+	"version": "0.84.3",
 	"publisher": "shoelace66",
 	"license": "MIT",
 	"private": true,

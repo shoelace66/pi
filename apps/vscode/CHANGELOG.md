@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.84.3
+
 ### Changed
 
 - Recorded the bundled AutoPi Core version independently so VS Code-only fixes can be released without changing other products.
